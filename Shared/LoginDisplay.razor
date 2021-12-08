@@ -1,0 +1,24 @@
+﻿<AuthorizeView>
+    <Authorized>
+        <a href="@("Profil/"+ Korisnik)" style="margin-top:auto; margin-bottom:auto">
+            <img src="@Slika" asp-append-version="true" style="vertical-align: middle; width: 30px; height: 30px; border-radius: 50%;" />
+            @context.User.Identity.Name
+        </a>
+        <form method="post" action="Identity/Account/LogOut">
+            <button type="submit" class="nav-link btn btn-link">Odjavi se</button>
+        </form>
+    </Authorized>
+    <NotAuthorized>
+        <a href="RegistrujKorisnika">Registruj se kao Korisnik</a>
+        <a href="RegistrujPruzaoca">Registruj se kao Pružalac</a>
+        <a href="Identity/Account/Login">Prijavi se</a>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code
+{
+    [Parameter]
+    public string Korisnik { get; set; } = "";
+    [Parameter]
+    public string Slika { get; set; } = "Nema slike.png";
+}

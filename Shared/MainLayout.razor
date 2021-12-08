@@ -1,0 +1,51 @@
+﻿@inherits LayoutComponentBase
+@inject MySqlCRUD dbContext
+@inject AuthenticationStateProvider authenticationStateProvider
+
+
+<AuthorizeView Context="authContext">
+    <Authorized>
+        <div class="sidebar">
+            <NavMenu Korisnik="@korisnikId" NoviZahtevi="@count" />
+        </div>
+    </Authorized>
+    <NotAuthorized>
+
+    </NotAuthorized>
+</AuthorizeView>
+
+
+<div class="main">
+    <div class="top-row px-4 auth">
+        <LoginDisplay Korisnik="@korisnikId" Slika="@slika" />
+    </div>
+
+    <div class="content px-4">
+        @Body
+    </div>
+</div>
+
+@code
+{
+    private string korisnikId { get; set; } = "";
+    private int count = 0;
+    private string slika = "Nema slike.png";
+
+    protected async override Task OnInitializedAsync()
+    {
+        var state = await authenticationStateProvider.GetAuthenticationStateAsync();
+        if (state.User.IsInRole("KorisnikUsluge"))
+        {
+            korisnikId = dbContext.NadjiKorisnika(state.User.Identity.Name, out count, out slika);
+        }
+        else if (state.User.IsInRole("PruzalacUsluge"))
+        {
+            korisnikId = dbContext.NadjiPruzaoca(state.User.Identity.Name, out count, out slika);
+        }
+        else
+        {
+            korisnikId = "";
+        }
+        
+    }
+}

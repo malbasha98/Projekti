@@ -1,0 +1,804 @@
+﻿@page "/Oglas/{oglasid}"
+@using System.Text.RegularExpressions;
+@using System.IO;
+@using Newtonsoft.Json;
+@using System.Threading.Tasks;
+@using BlazorFabric;
+@using Syncfusion.Blazor.Notifications;
+@inject AuthenticationStateProvider authenticationStateProvider
+@inject MySqlCRUD dbContext
+@inject NavigationManager navMenager
+
+@if (!Ucitan)
+{
+    <div class="sk-circle">
+        <div class="sk-circle1 sk-child"></div>
+        <div class="sk-circle2 sk-child"></div>
+        <div class="sk-circle3 sk-child"></div>
+        <div class="sk-circle4 sk-child"></div>
+        <div class="sk-circle5 sk-child"></div>
+        <div class="sk-circle6 sk-child"></div>
+        <div class="sk-circle7 sk-child"></div>
+        <div class="sk-circle8 sk-child"></div>
+        <div class="sk-circle9 sk-child"></div>
+        <div class="sk-circle10 sk-child"></div>
+        <div class="sk-circle11 sk-child"></div>
+        <div class="sk-circle12 sk-child"></div>
+    </div>
+}
+else
+{
+
+
+    <AuthorizeView Roles="KorisnikUsluge, PruzalacUsluge" Context="authProvider">
+        <Authorized>
+            @if (oglas != null)
+            {
+                <h1>@naslov</h1>
+                <div class="row col-md-3 @stanje" style="min-width:200px">@stanjePoruka</div>
+                <div class="row" style="margin-top:2px; margin-bottom:6px">
+                    <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Oglas postavio:</label>
+                    <span class="col-md-10">
+                        <img src="@(oglas.KorisnikUsluge.PutanjaDoSlike)" asp-append-version="true" style="vertical-align: middle; width: 40px; height: 40px; border-radius: 50%; cursor:pointer" @onclick="@(e => IdiNaProfil(oglas.KorisnikUsluge.Id))" />
+                        <label style="margin-top:auto; margin-bottom:auto; margin-left:2px; cursor:pointer" @onclick="@(e => IdiNaProfil(oglas.KorisnikUsluge.Id))"> @oglas.KorisnikUsluge.UserName</label>
+                    </span>
+                </div>
+                <div class="row" style="margin-top:2px; margin-bottom:6px">
+                    <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Traže se:</label>
+                    <label class="col-md-10" style="margin-top:auto; margin-bottom:auto">@usluga</label>
+                </div>
+                <div class="row" style="margin-top:2px; margin-bottom:6px">
+                    <label class="col-md-2" style="margin-top: auto; margin-bottom: auto; font-weight: bold; min-width: 180px">Opis oglasa:</label>
+                    <label class="col-md-10" style="margin-top:auto; margin-bottom:auto">@oglas.Opis</label>
+                </div>
+                <div class="row" style="margin-top:2px; margin-bottom:6px">
+                    <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Datum važenja:</label>
+                    <label class="col-md-10" style="margin-top:auto; margin-bottom:auto">@oglas.DatumVazenja.ToString("dd.MM.yyyy.")</label>
+                </div>
+                <div class="row" style="margin-top:2px; margin-bottom:6px">
+                    <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Slike oglasa:</label>
+                    <span class="col-md-10">
+                        @foreach (var slika in slike)
+                        {
+                            var putanja = slika;
+                            if (slika != "")
+                            {
+                                <span @onclick="@(e => PrikaziSliku(putanja))">
+                                    <img id="slikaOglas" src="@(slika)" asp-append-version="true" style="width:auto;height:100px; cursor:pointer" />
+                                </span>
+                            }
+
+                        }
+                    </span>
+                </div>
+
+
+            }
+            else
+            {
+                <h2>Oglas ne postoji!</h2>
+            }
+
+        </Authorized>
+
+        <NotAuthorized>
+            <h2>Nema nista na ovoj stranici</h2>
+        </NotAuthorized>
+    </AuthorizeView>
+
+@if (oglas != null)
+{
+    @if (oglas.Stanje == Stanje.Aktivan)
+    {
+        if (ImaOglas)
+        {
+            <AuthorizeView Roles="KorisnikUsluge" Context="authProvider">
+                <Authorized>
+                    <p> </p>
+                    <div class="row">
+                        <h4>@(oglas.Evidencije.Count > 0 ? "Potencijalni pružaoci usluga:" : "Nema potencijalnih pružaoca usluga.")</h4>
+                    </div>
+                    @foreach (var ev in oglas.Evidencije)
+                    {
+                        var idPruzaoca = ev.PruzalacUsluge.Id;
+                        <div class="row" style="margin-top:2px; margin-bottom:2px">
+                            <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; cursor:pointer" @onclick="@(e => IdiNaProfil(idPruzaoca))">@(ev.PruzalacUsluge.Ime + " " + ev.PruzalacUsluge.Prezime)</label>
+                            <label class="col-md-1" style="font-style:italic; margin-top:auto; margin-bottom:auto; cursor:pointer" @onclick="@(e => IdiNaProfil(idPruzaoca))">@("(" + ev.PruzalacUsluge.UserName + ")")</label>
+                            @if (!PostojiZahtev.GetValueOrDefault(idPruzaoca))
+                            {
+                                @if (!PrimljenZahtev.GetValueOrDefault(idPruzaoca))
+                                {
+                                    <span class="col-md-2" style="margin-top:auto; margin-bottom:auto">
+                                        <SfProgressButton @onclick="@(e => PosaljiZahtevPruzaocu(idPruzaoca))" Content="Pošalji zahtev" EnableProgress="true" CssClass="e-flat e-success">
+                                            <ProgressButtonSpinSettings Position="SpinPosition.Center"></ProgressButtonSpinSettings>
+                                            <ProgressButtonAnimationSettings Effect="AnimationEffect.SlideLeft"></ProgressButtonAnimationSettings>
+                                        </SfProgressButton>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="col-md-2" style="margin-top:auto; margin-bottom:auto">
+                                        <SfProgressButton @onclick="@(e => PotvrdiZahtev(idPruzaoca))" Content="Potvrdi zahtev" EnableProgress="true" CssClass="e-flat e-primary">
+                                            <ProgressButtonSpinSettings Position="SpinPosition.Center"></ProgressButtonSpinSettings>
+                                            <ProgressButtonAnimationSettings Effect="AnimationEffect.SlideLeft"></ProgressButtonAnimationSettings>
+                                        </SfProgressButton>
+                                    </span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="col-md-2" style="margin-top:auto; margin-bottom:auto">
+                                    <SfProgressButton Disabled="true" Content="Već poslat zahtev">
+                                    </SfProgressButton>
+                                </span>
+                            }
+                        </div>
+                    }
+                    <p> </p>
+                    <div class="row col-md-3" style="display:flex; justify-content:center">
+                        <SfButton CssClass="e-primary" @onclick="ObrisiOglas">Obriši oglas</SfButton>
+                        &ensp;
+                        <SfButton CssClass="e-primary" @onclick="AzurirajOglas">Ažuriraj oglas</SfButton>
+                    </div>
+
+                    <SfDialog Width="335px" IsModal="true" @bind-Visible="@VisibilityObrisi" ShowCloseIcon="true">
+                        <DialogTemplates>
+                            <Header> Obriši</Header>
+                            <Content> <p>Da li ste sigurni da želite da obrišete oglas?</p> </Content>
+                        </DialogTemplates>
+                        <DialogButtons>
+                            <DialogButton OnClick="@DlgButtonClickObrisi">
+                                <DialogButtonModel Content="Da" IsPrimary="true"></DialogButtonModel>
+                            </DialogButton>
+                            <DialogButton OnClick="@(() => { VisibilityObrisi = false; })">
+                                <DialogButtonModel Content="Odustani"></DialogButtonModel>
+                            </DialogButton>
+                        </DialogButtons>
+                        <DialogAnimationSettings Effect="@DialogEffect.FadeZoom"></DialogAnimationSettings>
+                    </SfDialog>
+                </Authorized>
+
+                <NotAuthorized>
+
+                </NotAuthorized>
+            </AuthorizeView>
+        }
+        <AuthorizeView Roles="PruzalacUsluge">
+            <Authorized>
+                @if (IstiTipUsluge)
+                {
+                    <div class="row col-md-3" style="display:flex; justify-content:center">
+                        @if (!PoslatZahtev)
+                        {
+                            @if (!PostojiZahtev.GetValueOrDefault(Pruzalac.Id))
+                            {
+                                <SfProgressButton @onclick="PosaljiZahtevKorisniku" Content="Pošalji zahtev" EnableProgress="true" CssClass="e-flat e-success">
+                                    <ProgressButtonSpinSettings Position="SpinPosition.Center"></ProgressButtonSpinSettings>
+                                    <ProgressButtonAnimationSettings Effect="AnimationEffect.SlideLeft"></ProgressButtonAnimationSettings>
+                                </SfProgressButton>
+                            }
+                            else
+                            {
+                                <SfProgressButton @onclick="@(e => PotvrdiZahtev(Pruzalac.Id))" Content="Potvrdi zahtev" EnableProgress="true" CssClass="e-flat e-primary">
+                                    <ProgressButtonSpinSettings Position="SpinPosition.Center"></ProgressButtonSpinSettings>
+                                    <ProgressButtonAnimationSettings Effect="AnimationEffect.SlideLeft"></ProgressButtonAnimationSettings>
+                                </SfProgressButton>
+                            }
+                        }
+                        else
+                        {
+                            <SfProgressButton Disabled="true" Content="Već poslat zahtev">
+                            </SfProgressButton>
+                        }
+                    </div>
+                }
+            </Authorized>
+
+            <NotAuthorized>
+
+            </NotAuthorized>
+        </AuthorizeView>
+    }
+
+    @if (oglas.Stanje == Stanje.UIzvršavanju && ImaOglas)
+    {
+        <AuthorizeView Roles="KorisnikUsluge" Context="authContext">
+            <Authorized>
+                <div class="row">
+                    <br />
+                </div>
+                <div class="row" style="margin-top:2px; margin-bottom:6px">
+                    <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Izvršava:</label>
+                    <span class="col-md-10">
+                        <img src="@(oglas.OdabranPruzalac.PutanjaDoSlike)" asp-append-version="true" style="vertical-align: middle; width: 40px; height: 40px; border-radius: 50%; cursor: pointer" @onclick="@(e => IdiNaProfil(oglas.OdabranPruzalac.Id))" />
+                        <label style="margin-top:auto; margin-bottom:auto; margin-left:2px; cursor:pointer" @onclick="@(e => IdiNaProfil(oglas.OdabranPruzalac.Id))"> @oglas.OdabranPruzalac.UserName</label>
+                    </span>
+                </div>
+                <div class="row col-md-3" style="display:flex; justify-content:center">
+                    <SfButton CssClass="e-primary" @onclick="ZavrsiOglas">Završi oglas</SfButton>
+                </div>
+
+
+                <SfDialog Width="335px" IsModal="true" @bind-Visible="@Visibility" ShowCloseIcon="true">
+                    <DialogTemplates>
+                        <Header>Završi</Header>
+                        <Content> <p>Da li ste sigurni da želite da završite oglas?</p> </Content>
+                    </DialogTemplates>
+                    <DialogButtons>
+                        <DialogButton OnClick="@DlgButtonClick">
+                            <DialogButtonModel Content="Da" IsPrimary="true"></DialogButtonModel>
+                        </DialogButton>
+                        <DialogButton OnClick="@(() => { Visibility = false; })">
+                            <DialogButtonModel Content="Odustani"></DialogButtonModel>
+                        </DialogButton>
+                    </DialogButtons>
+                    <DialogAnimationSettings Effect="@DialogEffect.FadeZoom"></DialogAnimationSettings>
+                </SfDialog>
+            </Authorized>
+
+            <NotAuthorized>
+
+            </NotAuthorized>
+        </AuthorizeView>
+    }
+
+    @if (oglas.Stanje == Stanje.Izvršen)
+    {
+        <AuthorizeView Roles="KorisnikUsluge" Context="authContext">
+            <Authorized>
+                @if (ImaOglas)
+                {
+
+                    @if (oglas.OcenjenPruzalac == null)
+                    {
+                        @*DODATO ODAVDE*@
+                        <div class="row" style="margin-top:2px; margin-bottom:6px">
+                            <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Pružalac usluge:</label>
+                            <span class="col-md-10">
+                                <img src="@(oglas.OdabranPruzalac.PutanjaDoSlike)" asp-append-version="true" style="vertical-align: middle; width: 40px; height: 40px; border-radius: 50%; cursor: pointer" @onclick="@(e => IdiNaProfil(oglas.OdabranPruzalac.Id))" />
+                                <label style="margin-top:auto; margin-bottom:auto; margin-left:2px; cursor:pointer" @onclick="@(e => IdiNaProfil(oglas.OdabranPruzalac.Id))"> @oglas.OdabranPruzalac.UserName</label>
+                            </span>
+                        </div>
+
+                        <div class="row" style="margin-top:2px; margin-bottom:6px">
+                            <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Ocenite pružaoca:</label>
+                            @*izmenjeno col-md-10 ispod*@
+                            <span class="col-md-10 row" style="margin-top: auto; margin-bottom: auto;">
+                                <FabricTheme>
+                                    <Rating OnChange="Oceni" AllowZeroStars="true" Size="RatingSize.Large"></Rating>
+                                </FabricTheme>
+                                &ensp;
+                                <SfButton CssClass="e-primary" @onclick="OceniPruzaoca">Oceni</SfButton>
+                            </span>
+
+                        </div>
+                    }
+                    else
+                    {
+
+                        <div class="row" style="margin-top:2px; margin-bottom:6px">
+                            <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Pružalac usluge:</label>
+                            <span class="col-md-10">
+                                <img src="@(oglas.OdabranPruzalac.PutanjaDoSlike)" asp-append-version="true" style="vertical-align: middle; width: 40px; height: 40px; border-radius: 50%; cursor: pointer" @onclick="@(e => IdiNaProfil(oglas.OdabranPruzalac.Id))" />
+                                <label style="margin-top:auto; margin-bottom:auto; margin-left:2px; cursor:pointer" @onclick="@(e => IdiNaProfil(oglas.OdabranPruzalac.Id))"> @oglas.OdabranPruzalac.UserName</label>
+                            </span>
+                        </div>
+
+                        <div class="row" style="margin-top:2px; margin-bottom:6px">
+                            <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Ocenite pružaoca:</label>
+                            <span class="col-md-10 row" style="margin-top: auto; margin-bottom: auto;">
+                                <FabricTheme>
+                                    <Rating ReadOnly="true" @bind-Rating="@ocenjenaOcena" Size="RatingSize.Large"></Rating>
+                                </FabricTheme>
+                                &ensp;
+                                Već ste ocenili pružaoca.
+                            </span>
+
+                        </div>
+                        @*DODATO DOVDE*@
+                    }
+
+
+                }
+            </Authorized>
+
+            <NotAuthorized>
+
+            </NotAuthorized>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="PruzalacUsluge" Context="authContext">
+            <Authorized>
+                @if (oglas.OcenjenKorisnik == null)
+                {
+                    @*DODATO ODAVDE*@
+                    <div class="row" style="margin-top:2px; margin-bottom:6px">
+                        <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Ocenite korisnika:</label>
+                        <span class="col-md-10 row" style="margin-top: auto; margin-bottom: auto;">
+                            <FabricTheme>
+                                <Rating OnChange="Oceni" AllowZeroStars="true" Size="RatingSize.Large"></Rating>
+                            </FabricTheme>
+                            &ensp;
+                            <SfButton CssClass="e-primary" @onclick="OceniKorisnika">Oceni</SfButton>
+                        </span>
+
+                    </div>
+                }
+                else
+                {
+                    <div class="row" style="margin-top:2px; margin-bottom:6px">
+                        <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Ocenite korisnika:</label>
+                        <span class="col-md-10 row" style="margin-top: auto; margin-bottom: auto;">
+                            <FabricTheme>
+                                <Rating ReadOnly="true" @bind-Rating="@ocenjenaOcena" Size="RatingSize.Large"></Rating>
+                            </FabricTheme>
+                            &ensp;
+                            Već ste ocenili korisnika.
+                        </span>
+
+                    </div>
+                }
+                @*DODATO DOVDE*@
+            </Authorized>
+
+            <NotAuthorized>
+
+            </NotAuthorized>
+        </AuthorizeView>
+    }
+    @*DODATO ODAVDE*@
+    @if (oglas.Stanje == Stanje.Neaktivan)
+    {
+        <AuthorizeView Roles="KorisnikUsluge" Context="authContext">
+            <Authorized>
+                @if (ImaOglas)
+                {
+
+                    @if (oglas.OdabranPruzalac != null)
+                    {
+
+                        <div class="row" style="margin-top:2px; margin-bottom:6px">
+                            <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Pružalac usluge:</label>
+                            <span class="col-md-10">
+                                <img src="@(oglas.OdabranPruzalac.PutanjaDoSlike)" asp-append-version="true" style="vertical-align: middle; width: 40px; height: 40px; border-radius: 50%; cursor: pointer" @onclick="@(e => IdiNaProfil(oglas.OdabranPruzalac.Id))" />
+                                <label style="margin-top:auto; margin-bottom:auto; margin-left:2px; cursor:pointer" @onclick="@(e => IdiNaProfil(oglas.OdabranPruzalac.Id))"> @oglas.OdabranPruzalac.UserName</label>
+                            </span>
+                        </div>
+
+                        <div class="row" style="margin-top:2px; margin-bottom:6px">
+                            <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Ocena pružaoca:</label>
+                            <span class="col-md-10" style="margin-top: auto; margin-bottom: auto;">
+                                <FabricTheme>
+                                    <Rating ReadOnly="true" @bind-Rating="@ocenjenaOcena" Size="RatingSize.Large"></Rating>
+                                </FabricTheme>
+                            </span>
+                        </div>
+                        <div class="row" style="margin-top:2px; margin-bottom:6px">
+                            <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Vaša ocena za oglas:</label>
+                            <span class="col-md-10" style="margin-top: auto; margin-bottom: auto;">
+                                <FabricTheme>
+                                    <Rating ReadOnly="true" @bind-Rating="@vasaOcenjenaOcena" Size="RatingSize.Large"></Rating>
+                                </FabricTheme>
+                            </span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row" style="margin-top:2px; margin-bottom:6px">
+                            <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px; color:red">OGLAS JE ISTEKAO!!!</label>
+                            <span class="col-md-10">
+                                <SfButton CssClass="e-primary" @onclick="ProduziOglas">Produži</SfButton>
+                            </span>
+                        </div>
+
+                        <SfDialog Width="400px" IsModal="true" @bind-Visible="@VisibilityProduzi">
+                            <DialogTemplates>
+                                <Header> Na koliko dana želite da produžite oglas?</Header>
+                                <Content>
+                                    <SfNumericTextBox ID='inVal' @bind-Value="@noviDatumDana" Placeholder="Uneti broj dana" Decimals="0" Min="1" Format="##" />
+                                </Content>
+                            </DialogTemplates>
+                            <DialogButtons>
+                                <DialogButton OnClick="@DlgButtonClickProduzi">
+                                    <DialogButtonModel Content="Produzi" IsPrimary="true"></DialogButtonModel>
+                                </DialogButton>
+                                <DialogButton OnClick="@(() => { VisibilityProduzi = false; })">
+                                    <DialogButtonModel Content="Odustani"></DialogButtonModel>
+                                </DialogButton>
+                            </DialogButtons>
+                            <DialogAnimationSettings Effect="@DialogEffect.FadeZoom"></DialogAnimationSettings>
+                        </SfDialog>
+                    }
+
+
+                }
+            </Authorized>
+
+            <NotAuthorized>
+
+            </NotAuthorized>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="PruzalacUsluge" Context="authContext">
+            <Authorized>
+                @if (oglas.OdabranPruzalac != null)
+                {
+
+                    <div class="row" style="margin-top:2px; margin-bottom:6px">
+                        <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Ocena korisnika:</label>
+                        <span class="col-md-10" style="margin-top: auto; margin-bottom: auto;">
+                            <FabricTheme>
+                                <Rating ReadOnly="true" @bind-Rating="@ocenjenaOcena" Size="RatingSize.Large"></Rating>
+                            </FabricTheme>
+                        </span>
+                    </div>
+                    <div class="row" style="margin-top:2px; margin-bottom:6px">
+                        <label class="col-md-2" style="margin-top:auto; margin-bottom:auto; font-weight:bold; min-width:180px">Vaša ocena za oglas:</label>
+                        <span class="col-md-10" style="margin-top: auto; margin-bottom: auto;">
+                            <FabricTheme>
+                                <Rating ReadOnly="true" @bind-Rating="@vasaOcenjenaOcena" Size="RatingSize.Large"></Rating>
+                            </FabricTheme>
+                        </span>
+                    </div>
+                }
+
+            </Authorized>
+
+            <NotAuthorized>
+
+            </NotAuthorized>
+        </AuthorizeView>
+    }
+
+    <AuthorizeView>
+        <Authorized>
+            @if (VisibilitySlika)
+            {
+                <div class="slikaModal">
+                    <span @onclick="@(() => { VisibilitySlika = false; })" class="zatvori">&times;</span>
+                    <img class="modal-sadrzaj" src="@(slikaKojaSePrikazuje)">
+                </div>
+            }
+
+            <SfToast @ref="ToastObj" Title="@ToastNaslov" TimeOut=7500 CssClass="e-toast-success" Icon="e-success toast-icons" Content="@ToastSadrzaj">
+                <ToastPosition Y="Bottom" X="Right"></ToastPosition>
+            </SfToast>
+
+
+
+        </Authorized>
+    </AuthorizeView>
+
+    @*DODATO DOVDE*@
+}
+}
+
+
+
+@code
+{
+    [Parameter]
+    public string oglasid { get; set; }
+
+    private Oglas oglas { get; set; }
+    public bool Ucitan { get; set; } = false;
+    KorisnikUsluge Korisnik = new KorisnikUsluge();
+    PruzalacUsluge Pruzalac = new PruzalacUsluge();
+
+    private SfToast ToastObj;
+    private string ToastNaslov { get; set; }
+    private string ToastSadrzaj { get; set; }
+
+    private bool ImaOglas { get; set; }
+    private bool IstiTipUsluge { get; set; } = false;
+    private bool PoslatZahtev { get; set; } = false;
+    private bool Visibility { get; set; }
+    private bool VisibilityObrisi { get; set; }
+    private bool VisibilitySlika { get; set; }
+    private string slikaKojaSePrikazuje;
+    private bool VisibilityProduzi { get; set; }
+    private int noviDatumDana { get; set; }
+    private Dictionary<string, bool> PostojiZahtev = new Dictionary<string, bool>();
+    private Dictionary<string, bool> PrimljenZahtev = new Dictionary<string, bool>();
+
+    private double ocena { get; set; }
+    private double ocenjenaOcena { get; set; }
+    private double vasaOcenjenaOcena { get; set; } 
+
+    private string naslov;
+    private string stanje;
+    private string stanjePoruka;
+    private string usluga;
+    private string path = Directory.GetCurrentDirectory();
+    private string[] slike;
+
+    protected async override Task OnInitializedAsync()
+    {
+
+        Ucitan = false;;
+        Guid oglasGuid;
+        if (Guid.TryParse(oglasid, out oglasGuid))
+            oglas = await dbContext.nadjiOglas(oglasGuid);
+
+        if (oglas == null)
+            return;
+
+        if (oglas.ProveriDaLiVazi())
+        {
+            dbContext.Update(oglas);
+            await dbContext.SaveChangesAsync();
+        }
+        naslov = oglas.NaslovOglasa.ToUpper();
+        string[] split = Regex.Split(oglas.TipUsluge.ToString(), @"(?<!^)(?=[A-Z])");
+        string ceo = "";
+        foreach (var rec in split)
+        {
+            ceo += rec + " ";
+        }
+        usluga = ceo;
+        switch (oglas.Stanje)
+        {
+            case Stanje.Aktivan:
+                stanje = "alert alert-success";
+                stanjePoruka = "Oglas je AKTIVAN!";
+                break;
+            case Stanje.UIzvršavanju:
+                stanje = "alert alert-info";
+                stanjePoruka = "Oglas je U IZVRŠAVANJU!";
+                break;
+            case Stanje.Izvršen:
+                stanje = "alert alert-dark";
+                stanjePoruka = "Oglas je IZVRŠEN!";
+                break;
+            case Stanje.Neaktivan:
+                stanje = "alert alert-danger";
+                stanjePoruka = "Oglas je NEAKTIVAN!";
+                break;
+            default:
+                break;
+        }
+
+        if (oglas.PutanjeDoSlika != null)
+            slike = oglas.PutanjeDoSlika.Split('?');
+        else
+            slike = new string[0];
+
+        var state = await authenticationStateProvider.GetAuthenticationStateAsync();
+
+        if (state.User.IsInRole("PruzalacUsluge"))
+        {
+            Pruzalac = await dbContext.VratiPruzaoca(state.User.Identity.Name);
+            if (Pruzalac.TipUsluga.HasFlag(oglas.TipUsluge))
+                IstiTipUsluge = true;
+            PoslatZahtev = await dbContext.PostojiZahtevKaKorisniku(Pruzalac.Id, oglas.Id);
+            ocenjenaOcena = oglas.OcenjenKorisnik.GetValueOrDefault();
+            vasaOcenjenaOcena = oglas.OcenjenPruzalac.GetValueOrDefault();
+
+            bool DaLiPostojiZahtev = await dbContext.PostojiZahtevKaPruzaocu(oglas.KorisnikUsluge.UserName, Pruzalac.Id, oglas.Id);
+            PostojiZahtev.Add(Pruzalac.Id, DaLiPostojiZahtev);
+        }
+        else if (state.User.IsInRole("KorisnikUsluge"))
+        {
+            Korisnik = await dbContext.VratiKorisnika(state.User.Identity.Name);
+            ImaOglas = await dbContext.DaLiImaKorisnikOglas(Korisnik.Id, oglasid);
+            ocenjenaOcena = oglas.OcenjenPruzalac.GetValueOrDefault();
+            vasaOcenjenaOcena = oglas.OcenjenKorisnik.GetValueOrDefault();
+            foreach (var evidencija in oglas.Evidencije)
+            {
+                string IdPruzaoca = evidencija.PruzalacUsluge.Id;
+                bool DaLiPostojiZahtev = await dbContext.PostojiZahtevKaPruzaocu(Korisnik.UserName, IdPruzaoca, oglas.Id);
+                PostojiZahtev.Add(IdPruzaoca, DaLiPostojiZahtev);
+                bool DaLiJePrimljenZahtev = await dbContext.PostojiZahtevKaKorisniku(IdPruzaoca, oglas.Id);
+                PrimljenZahtev.Add(IdPruzaoca, DaLiJePrimljenZahtev);
+            }
+        }
+
+    }
+
+    private async Task PosaljiZahtevPruzaocu(string id)
+    {
+        Zahtev noviZahtev = new Zahtev()
+        {
+            Pregledan = false,
+            Oglas = oglas
+        };
+        noviZahtev.Ucesnik = await dbContext.PruzaociUsluga.FindAsync(id);
+
+        noviZahtev.Naslov = Korisnik.UserName;
+        dbContext.Add(noviZahtev);
+        await dbContext.SaveChangesAsync();
+
+        PostojiZahtev[id] = true;
+
+        ToastObj.Content = "Uspesno poslat zahtev";
+        ToastObj.Title = "Vas zahtev je uspesno poslat korisniku " + noviZahtev.Ucesnik.UserName;
+        await ToastObj.Show();
+
+
+    }
+
+    private async Task PosaljiZahtevKorisniku()
+    {
+        Zahtev noviZahtev = new Zahtev()
+        {
+            Pregledan = false,
+            Oglas = oglas,
+
+        };
+
+        noviZahtev.Naslov = Pruzalac.UserName;
+
+        noviZahtev.Ucesnik = await dbContext.PruzaociUsluga.FindAsync(Pruzalac.Id);
+        dbContext.Add(noviZahtev);
+        await dbContext.SaveChangesAsync();
+
+        PoslatZahtev = true;
+
+        PrimljenZahtev[Pruzalac.Id] = true;
+
+        ToastObj.Content = "Uspesno poslat zahtev";
+        ToastObj.Title = "Vas zahtev je uspesno poslat korisniku " + oglas.KorisnikUsluge.UserName;
+        await ToastObj.Show();
+
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            Ucitan = true;
+            StateHasChanged();
+        }
+
+    }
+
+    private void IdiNaProfil(string id)
+    {
+        navMenager.NavigateTo("Profil/" + id);
+    }
+
+    private void ObrisiOglas()
+    {
+        this.VisibilityObrisi = true;
+    }
+
+    private void AzurirajOglas()
+    {
+        navMenager.NavigateTo("NoviOglas/" + oglas.Id);
+    }
+
+    private void ZavrsiOglas()
+    {
+        this.Visibility = true;
+    }
+
+    private async Task DlgButtonClickObrisi()
+    {
+        this.VisibilityObrisi = false;
+
+        await dbContext.ObrisiOglas(oglas.Id);
+        navMenager.NavigateTo("MojiOglasi");
+    }
+
+    private async Task DlgButtonClick()
+    {
+        this.Visibility = false;
+
+        oglas.Stanje = Stanje.Izvršen;
+        stanje = "alert alert-dark";
+        stanjePoruka = "Oglas je IZVRŠEN!";
+        dbContext.Oglasi.Update(oglas);
+        await dbContext.SaveChangesAsync();
+
+        ToastObj.Title = "Uspesno promena oglasa";
+        ToastObj.Content = "Oglas je zvanično izvršen";
+        await ToastObj.Show();
+    }
+
+    private void PrikaziSliku(string putanja)
+    {
+        slikaKojaSePrikazuje = putanja;
+        this.VisibilitySlika = true;
+    }
+
+    private void Oceni(double nova)
+    {
+        ocena = nova;
+    }
+
+    private async Task OceniKorisnika()
+    {
+        oglas.OcenjenKorisnik = (int)ocena;
+        oglas.KorisnikUsluge.OceniOglas((int)ocena);
+
+        if (oglas.OcenjenPruzalac != null && oglas.OcenjenKorisnik != null)
+        {
+            stanje = "alert alert-danger";
+            stanjePoruka = "Oglas je NEAKTIVAN!";
+            oglas.Stanje = Stanje.Neaktivan;
+        }
+
+        dbContext.Update(oglas);
+        dbContext.Update(oglas.KorisnikUsluge);
+        await dbContext.SaveChangesAsync();
+        ocenjenaOcena = oglas.OcenjenKorisnik.GetValueOrDefault();
+        this.StateHasChanged();
+
+        ToastObj.Title = "Uspesno ocena";
+        ToastObj.Content = "Uspešno ste ocenili korisnika " + oglas.KorisnikUsluge.UserName;
+        await ToastObj.Show();
+    }
+
+    private async Task OceniPruzaoca()
+    {
+        oglas.OcenjenPruzalac = (int)ocena;
+        oglas.OdabranPruzalac.OceniOglas((int)ocena);
+
+
+        if (oglas.OcenjenPruzalac != null && oglas.OcenjenKorisnik != null)
+        {
+            stanje = "alert alert-danger";
+            stanjePoruka = "Oglas je NEAKTIVAN!";
+            oglas.Stanje = Stanje.Neaktivan;
+        }
+
+        dbContext.Update(oglas);
+        dbContext.Update(oglas.OdabranPruzalac);
+        await dbContext.SaveChangesAsync();
+        ocenjenaOcena = oglas.OcenjenPruzalac.GetValueOrDefault();
+        this.StateHasChanged();
+
+        ToastObj.Title = "Uspesno ocena";
+        ToastObj.Content = "Uspešno ste ocenili korisnika " + oglas.OdabranPruzalac.UserName;
+        await ToastObj.Show();
+    }
+
+    private void ProduziOglas()
+    {
+        this.VisibilityProduzi = true;
+    }
+
+    private async Task DlgButtonClickProduzi()
+    {
+        oglas.DatumVazenja = DateTime.Now.AddDays(noviDatumDana);
+        oglas.Stanje = Stanje.Aktivan;
+        if (!oglas.ProveriDaLiVazi())
+        {
+            stanje = "alert alert-success";
+            stanjePoruka = "Oglas je AKTIVAN!";
+            dbContext.Oglasi.Update(oglas);
+            await dbContext.SaveChangesAsync();
+        }
+        this.VisibilityProduzi = false;
+    }
+
+    private async Task PotvrdiZahtev(string idPruzaoca)
+    {
+        Zahtev zahtev = await dbContext.vratiZahtev(idPruzaoca, oglas.Id);
+        var izmenjenaEvidencija = await dbContext.nadjiEvidenciju(oglas.Id, idPruzaoca);
+        oglas.ProveriDaLiVazi();
+        if (oglas.Stanje == Stanje.Aktivan)
+        {
+            izmenjenaEvidencija.Prijavljen = true;
+            zahtev.Pregledan = true;
+            oglas.Stanje = Stanje.UIzvršavanju;
+            oglas.OdabranPruzalac = zahtev.Ucesnik;
+            dbContext.Update(oglas);
+            dbContext.Update(izmenjenaEvidencija);
+            dbContext.Update(zahtev);
+            await dbContext.SaveChangesAsync();
+
+            stanje = "alert alert-info";
+            stanjePoruka = "Oglas je U IZVRŠAVANJU!";
+            //this.StateHasChanged();
+
+            ToastObj.Title = "Uspesno potvrđen zahtev";
+            ToastObj.Content = "Uspešno ste potvrdili zahtev";
+            await ToastObj.Show();
+        }
+        else
+        {
+            //ovde dodati notifikaciju
+        }
+    }
+}

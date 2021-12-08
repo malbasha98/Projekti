@@ -1,0 +1,653 @@
+﻿@page "/MojiZahtevi"
+
+@inject AuthenticationStateProvider authenticationStateProvider
+@inject UserManager<IdentityUser> userManager
+@inject MySqlCRUD dbContext
+@inject NavigationManager navMenager
+@using System.Text.RegularExpressions;
+@using Newtonsoft.Json;
+
+@if (!Ucitan)
+{
+    <div class="sk-circle">
+        <div class="sk-circle1 sk-child"></div>
+        <div class="sk-circle2 sk-child"></div>
+        <div class="sk-circle3 sk-child"></div>
+        <div class="sk-circle4 sk-child"></div>
+        <div class="sk-circle5 sk-child"></div>
+        <div class="sk-circle6 sk-child"></div>
+        <div class="sk-circle7 sk-child"></div>
+        <div class="sk-circle8 sk-child"></div>
+        <div class="sk-circle9 sk-child"></div>
+        <div class="sk-circle10 sk-child"></div>
+        <div class="sk-circle11 sk-child"></div>
+        <div class="sk-circle12 sk-child"></div>
+    </div>
+}
+else
+{
+    <AuthorizeView>
+        <NotAuthorized>
+            <h2>Nema nista na ovoj stranici</h2>
+        </NotAuthorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="KorisnikUsluge">
+        <Authorized>
+            <div class="row mb-3" style="display:flex; align-items:center">
+                <label style="margin-bottom:auto; margin-top:auto">Prikaži: &ensp;</label>
+                <span style="margin-bottom:auto; margin-top:auto">
+                    <SfDropDownList Index="0" TItem="Polje" TValue="string" DataSource="@listaP">
+                        <DropDownListEvents TValue="string" ValueChange="OnChangeListPrikaz"></DropDownListEvents>
+                        <DropDownListFieldSettings Text="Tekst" Value="Id"></DropDownListFieldSettings>
+                    </SfDropDownList>
+                </span>
+                &ensp;
+                <span style="margin-bottom:auto; margin-top:auto">
+                    <SfDropDownList Index="0" TItem="Polje" TValue="string" DataSource="@listaS">
+                        <DropDownListEvents TValue="string" ValueChange="OnChangeListSeen"></DropDownListEvents>
+                        <DropDownListFieldSettings Text="Tekst" Value="Id"></DropDownListFieldSettings>
+                    </SfDropDownList>
+                </span>
+                <label style="margin-bottom:auto; margin-top:auto">&ensp; Filtriraj po: &ensp;</label>
+                <span style="margin-bottom:auto; margin-top:auto">
+                    <SfDropDownList Index="0" TItem="Polje" TValue="string" DataSource="@listaF">
+                        <DropDownListEvents TValue="string" ValueChange="OnChangeListFilter"></DropDownListEvents>
+                        <DropDownListFieldSettings Text="Tekst" Value="Id"></DropDownListFieldSettings>
+                    </SfDropDownList>
+                </span>
+                <label style="margin-bottom:auto; margin-top:auto">&ensp; Za tip usluge: &ensp;</label>
+                <span style="margin-bottom:auto; margin-top:auto">
+                    <SfMultiSelect @bind-Value="@selektovaneUsluge" Mode="VisualMode.CheckBox" Placeholder="Tipovi usluga" DataSource="@listaT" ShowDropDownIcon="true" EnableSelectionOrder="false" AllowFiltering="false" ShowSelectAll="true" UnSelectAllText="poništi" SelectAllText="svi tipovi" Width="250px">
+                        <MultiSelectEvents TValue="TipUsluge[]" ValueChange="OnChangeListTip"></MultiSelectEvents>
+                        <MultiSelectFieldSettings Text="Tekst" Value="TipUsluge"></MultiSelectFieldSettings>
+                    </SfMultiSelect>
+
+                </span>
+            </div>
+            <table class="table table-bordered table-hover">
+                <thead>
+                    <tr>
+                        @*dodato*@
+                        <th scope="col">Zahtev od/ka korisniku</th>
+                        <th scope="col">Naslov oglasa</th>
+                        <th scope="col"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var zahtev in Zahtevi.OrderBy(kriterijumF).Where(x => (x.Oglas.TipUsluge & kriterijumT) == x.Oglas.TipUsluge))
+                    {
+                        var idOglasa = zahtev.Oglas.Id;
+                        var userNameKorisnika = zahtev.Naslov;
+                        var idZahteva = zahtev.Id;
+                        if (!(prikaziPoslate && prikaziPrimljene))
+                        {
+                            if (prikaziPoslate && Korisnik.UserName != userNameKorisnika)
+                                continue;
+                            if (prikaziPrimljene && Korisnik.UserName == userNameKorisnika)
+                                continue;
+                        }
+                        if (!(prikaziPregledane && prikaziNepregledane))
+                        {
+                            if (prikaziPregledane && !zahtev.Pregledan)
+                                continue;
+                            if (prikaziNepregledane && zahtev.Pregledan)
+                                continue;
+                        }
+                        <tr>
+                            @*dodato*@                     @if (zahtev.Naslov != Korisnik.UserName)
+                            {
+                                //primljen
+                                if (!zahtev.Pregledan)
+                                {
+                                    <td style="cursor:pointer; font-weight:bold;background-color:#ecb3ff" @onclick="@(e => OtvoriKorisnika(userNameKorisnika, zahtev, true))" scope="col">@zahtev.Naslov</td>
+                                    <td style="cursor:pointer; font-weight:bold;background-color:#ecb3ff" @onclick="@(e => OtvoriOglas(idOglasa, zahtev, true))" scope="col">@zahtev.Oglas.NaslovOglasa</td>
+                                    <td scope="col" style="background-color:#ecb3ff">
+
+                                        @if (zahtev.Oglas.Stanje == Stanje.Aktivan)
+                                        {
+                                            <SfProgressButton Content="Potvrdi zahtev" EnableProgress="true" CssClass="e-flat e-success" @onclick="@(ev => (PotvrdiZahtev(idZahteva)))">
+                                                <ProgressButtonSpinSettings Position="SpinPosition.Center"></ProgressButtonSpinSettings>
+                                                <ProgressButtonAnimationSettings Effect="AnimationEffect.SlideLeft"></ProgressButtonAnimationSettings>
+                                            </SfProgressButton>
+                                        }
+                                        else
+                                        {
+                                            <SfProgressButton Disabled="true" Content="Oglas više nije aktivan">
+                                            </SfProgressButton>
+                                        }
+                                    </td>
+                                }
+                                else
+                                {
+                                    <td style="cursor:pointer" @onclick="@(e => OtvoriKorisnika(userNameKorisnika, zahtev, true))" scope="col">@zahtev.Naslov</td>
+                                    <td style="cursor:pointer" @onclick="@(e => OtvoriOglas(idOglasa, zahtev, true))" scope="col">@zahtev.Oglas.NaslovOglasa</td>
+                                    <td scope="col">
+                                        @if (zahtev.Oglas.Stanje == Stanje.Aktivan)
+                                        {
+                                            <SfProgressButton Content="Potvrdi zahtev" EnableProgress="true" CssClass="e-flat e-success" @onclick="@(ev => (PotvrdiZahtev(idZahteva)))">
+                                                <ProgressButtonSpinSettings Position="SpinPosition.Center"></ProgressButtonSpinSettings>
+                                                <ProgressButtonAnimationSettings Effect="AnimationEffect.SlideLeft"></ProgressButtonAnimationSettings>
+                                            </SfProgressButton>
+                                        }
+                                        else
+                                        {
+                                            <SfProgressButton Disabled="true" Content="Oglas više nije aktivan">
+                                            </SfProgressButton>
+                                        }
+                                    </td>
+                                }
+                            }
+                            else
+                            {
+                                //poslat
+                                userNameKorisnika = zahtev.Ucesnik.UserName;
+                                <td style="cursor:pointer; font-style:italic" @onclick="@(e => OtvoriKorisnika(userNameKorisnika, zahtev, true))" scope="col">&#8618;&ensp;@userNameKorisnika</td>
+                                <td style="cursor:pointer" @onclick="@(e => OtvoriOglas(idOglasa, zahtev, true))" scope="col">@zahtev.Oglas.NaslovOglasa</td>
+                                <td scope="col">
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </Authorized>
+        <NotAuthorized>
+
+        </NotAuthorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="PruzalacUsluge">
+        <Authorized>
+            <div class="row mb-3" style="display:flex; align-items:center">
+                <label style="margin-bottom:auto; margin-top:auto">Prikaži: &ensp;</label>
+                <span style="margin-bottom:auto; margin-top:auto">
+                    <SfDropDownList Index="0" TItem="Polje" TValue="string" DataSource="@listaP">
+                        <DropDownListEvents TValue="string" ValueChange="OnChangeListPrikaz"></DropDownListEvents>
+                        <DropDownListFieldSettings Text="Tekst" Value="Id"></DropDownListFieldSettings>
+                    </SfDropDownList>
+                </span>
+                &ensp;
+                <span style="margin-bottom:auto; margin-top:auto">
+                    <SfDropDownList Index="0" TItem="Polje" TValue="string" DataSource="@listaS">
+                        <DropDownListEvents TValue="string" ValueChange="OnChangeListSeen"></DropDownListEvents>
+                        <DropDownListFieldSettings Text="Tekst" Value="Id"></DropDownListFieldSettings>
+                    </SfDropDownList>
+                </span>
+                <label style="margin-bottom:auto; margin-top:auto">&ensp; Filtriraj po: &ensp;</label>
+                <span style="margin-bottom:auto; margin-top:auto">
+                    <SfDropDownList Index="0" TItem="Polje" TValue="string" DataSource="@listaF">
+                        <DropDownListEvents TValue="string" ValueChange="OnChangeListFilter"></DropDownListEvents>
+                        <DropDownListFieldSettings Text="Tekst" Value="Id"></DropDownListFieldSettings>
+                    </SfDropDownList>
+                </span>
+                <label style="margin-bottom:auto; margin-top:auto">&ensp; Za tip usluge: &ensp;</label>
+                <span style="margin-bottom:auto; margin-top:auto">
+                    <SfMultiSelect @bind-Value="@selektovaneUsluge" Mode="VisualMode.CheckBox" Placeholder="Tipovi usluga" DataSource="@listaT" ShowDropDownIcon="true" EnableSelectionOrder="false" AllowFiltering="false" ShowSelectAll="true" UnSelectAllText="poništi" SelectAllText="svi tipovi" Width="250px">
+                        <MultiSelectEvents TValue="TipUsluge[]" ValueChange="OnChangeListTip"></MultiSelectEvents>
+                        <MultiSelectFieldSettings Text="Tekst" Value="TipUsluge"></MultiSelectFieldSettings>
+                    </SfMultiSelect>
+                </span>
+            </div>
+            <table class="table table-bordered table-hover">
+                <thead>
+                    <tr>
+                        @*dodato*@
+                        <th scope="col">Zahtev od/ka korisniku</th>
+                        <th scope="col">Naslov oglasa</th>
+                        <th scope="col"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var zahtev in Zahtevi.OrderBy(kriterijumF).Where(x => (x.Oglas.TipUsluge & kriterijumT) == x.Oglas.TipUsluge))
+                    {
+                        var idOglasa = zahtev.Oglas.Id;
+                        var userNameKorisnika = zahtev.Naslov;
+                        var idZahteva = zahtev.Id;
+                        if (!(prikaziPoslate && prikaziPrimljene))
+                        {
+                            if (prikaziPoslate && Korisnik.UserName != userNameKorisnika)
+                                continue;
+                            if (prikaziPrimljene && Korisnik.UserName == userNameKorisnika)
+                                continue;
+                        }
+                        if (!(prikaziPregledane && prikaziNepregledane))
+                        {
+                            if (prikaziPregledane && !zahtev.Pregledan)
+                                continue;
+                            if (prikaziNepregledane && zahtev.Pregledan)
+                                continue;
+                        }
+                        <tr>
+                            @*dodato*@                     @if (zahtev.Naslov != Pruzalac.UserName)
+                            {
+                                //primljen
+                                if (!zahtev.Pregledan)
+                                {
+                                    <td style="cursor:pointer; font-weight:bold;background-color:#ecb3ff" @onclick="@(e => OtvoriKorisnika(userNameKorisnika, zahtev, false))" scope="col">@zahtev.Naslov</td>
+                                    <td style="cursor:pointer; font-weight:bold;background-color:#ecb3ff" @onclick="@(e => OtvoriOglas(idOglasa, zahtev, false))" scope="col">@zahtev.Oglas.NaslovOglasa</td>
+                                    <td scope="col" style="background-color:#ecb3ff">
+
+                                        @if (zahtev.Oglas.Stanje == Stanje.Aktivan)
+                                        {
+                                            <SfProgressButton Content="Potvrdi zahtev" EnableProgress="true" CssClass="e-flat e-success" @onclick="@(ev => (PotvrdiZahtev(idZahteva)))">
+                                                <ProgressButtonSpinSettings Position="SpinPosition.Center"></ProgressButtonSpinSettings>
+                                                <ProgressButtonAnimationSettings Effect="AnimationEffect.SlideLeft"></ProgressButtonAnimationSettings>
+                                            </SfProgressButton>
+                                        }
+                                        else
+                                        {
+                                            <SfProgressButton Disabled="true" Content="Oglas više nije aktivan">
+                                            </SfProgressButton>
+                                        }
+                                    </td>
+                                }
+                                else
+                                {
+                                    <td style="cursor:pointer" @onclick="@(e => OtvoriKorisnika(userNameKorisnika, zahtev, false))" scope="col">@zahtev.Naslov</td>
+                                    <td style="cursor:pointer" @onclick="@(e => OtvoriOglas(idOglasa, zahtev, false))" scope="col">@zahtev.Oglas.NaslovOglasa</td>
+                                    <td scope="col">
+                                        @if (zahtev.Oglas.Stanje == Stanje.Aktivan)
+                                        {
+                                            <SfProgressButton Content="Potvrdi zahtev" EnableProgress="true" CssClass="e-flat e-success" @onclick="@(ev => (PotvrdiZahtev(idZahteva)))">
+                                                <ProgressButtonSpinSettings Position="SpinPosition.Center"></ProgressButtonSpinSettings>
+                                                <ProgressButtonAnimationSettings Effect="AnimationEffect.SlideLeft"></ProgressButtonAnimationSettings>
+                                            </SfProgressButton>
+                                        }
+                                        else
+                                        {
+                                            <SfProgressButton Disabled="true" Content="Oglas više nije aktivan">
+                                            </SfProgressButton>
+                                        }
+                                    </td>
+                                }
+                            }
+                            else
+                            {
+                                //poslat
+                                userNameKorisnika = zahtev.Oglas.KorisnikUsluge.UserName;
+                                <td style="cursor:pointer; font-style:italic" @onclick="@(e => OtvoriKorisnika(userNameKorisnika, zahtev, false))" scope="col">&#8618;&ensp;@userNameKorisnika</td>
+                                <td style="cursor:pointer" @onclick="@(e => OtvoriOglas(idOglasa, zahtev, false))" scope="col">@zahtev.Oglas.NaslovOglasa</td>
+                                <td scope="col">
+                                </td>
+                            }
+
+
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </Authorized>
+        <NotAuthorized>
+
+        </NotAuthorized>
+    </AuthorizeView>
+
+    <SfDialog Width="335px" IsModal="true" @bind-Visible="@VisibilityUspesan">
+        <DialogTemplates>
+            <Header> Obaveštenje</Header>
+            <Content> <p>Uspešno potvrđen zahtev!</p> </Content>
+        </DialogTemplates>
+        <DialogButtons>
+            <DialogButton OnClick="@DlgButtonClickUspesno">
+                <DialogButtonModel Content="OK" IsPrimary="true"></DialogButtonModel>
+            </DialogButton>
+        </DialogButtons>
+        <DialogAnimationSettings Effect="@DialogEffect.FadeZoom"></DialogAnimationSettings>
+    </SfDialog>
+    <SfDialog Width="335px" IsModal="true" @bind-Visible="@VisibilityNeuspesan">
+        <DialogTemplates>
+            <Header> Obaveštenje</Header>
+            <Content> <p>Nažalost, oglas više nije aktivan!</p> </Content>
+        </DialogTemplates>
+        <DialogButtons>
+            <DialogButton OnClick="@DlgButtonClickNeuspesno">
+                <DialogButtonModel Content="OK" IsPrimary="true"></DialogButtonModel>
+            </DialogButton>
+        </DialogButtons>
+        <DialogAnimationSettings Effect="@DialogEffect.FadeZoom"></DialogAnimationSettings>
+    </SfDialog>
+}
+@code
+{
+    KorisnikUsluge Korisnik = new KorisnikUsluge();
+    PruzalacUsluge Pruzalac = new PruzalacUsluge();
+    List<Zahtev> Zahtevi = new List<Zahtev>();
+    public bool Ucitan { get; set; } = false;
+    private bool VisibilityUspesan { get; set; } = false;
+    private bool VisibilityNeuspesan { get; set; } = false;
+    private bool Redirect { get; set;} = false;
+
+    private class Polje
+    {
+        public string Id { get; set; }
+        public string Tekst { get; set; }
+
+        public Polje() { }
+    }
+    public class PoljeTip
+    {
+        public TipUsluge TipUsluge { get; set; }
+        public string Tekst { get; set; }
+
+        public PoljeTip() { }
+
+        public PoljeTip(TipUsluge usluga)
+        {
+            TipUsluge = usluga;
+            string[] split = Regex.Split(usluga.ToString(), @"(?<!^)(?=[A-Z])");
+            string ceo = "";
+            foreach (var rec in split)
+            {
+                ceo += rec + " ";
+            }
+            Tekst = ceo;
+        }
+    }
+
+
+    private bool prikaziPrimljene = true;
+    private bool prikaziPoslate = true;
+
+    private List<Polje> listaP = new List<Polje>()
+{
+        new Polje() { Id = "opcija1", Tekst = "sve zahteve"},
+        new Polje() { Id = "opcija2", Tekst = "poslate zahteve"},
+        new Polje() { Id = "opcija3", Tekst = "primljene zahteve"}
+    };
+
+    private bool prikaziPregledane = true;
+    private bool prikaziNepregledane = true;
+
+    private List<Polje> listaS = new List<Polje>()
+{
+        new Polje() { Id = "opcija1", Tekst = "sve zahteve"},
+        new Polje() { Id = "opcija2", Tekst = "pregledane zahteve"},
+        new Polje() { Id = "opcija3", Tekst = "nepregledane zahteve"}
+    };
+
+    private Func<Zahtev, string> kriterijumF = i => i.Oglas.KorisnikUsluge.UserName;
+    private string kriterijumFTekst;
+    private Func<Zahtev, string> kriterijumFKorisnickoIme = i => i.Oglas.KorisnikUsluge.UserName;
+
+    private List<Polje> listaF = new List<Polje>()
+{
+        new Polje() { Id = "opcija1", Tekst = "korisničkom imenu"},
+        new Polje() { Id = "opcija2", Tekst = "naslovu oglasa"},
+        new Polje() { Id = "opcija3", Tekst = "datumu važenja"},
+        new Polje() { Id = "opcija4", Tekst = "prosečnoj oceni"}
+    };
+
+    private TipUsluge kriterijumT;
+    private List<PoljeTip> listaT = new List<PoljeTip>();
+    private TipUsluge[] selektovaneUsluge = null;
+
+    private void OnChangeListPrikaz(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string> args)
+    {
+        var itemData = JsonConvert.DeserializeObject<Polje>(args.ItemData != null ? args.ItemData.ToString() : "");
+
+        switch (itemData.Id)
+        {
+            case "opcija1":
+                prikaziPoslate = true;
+                prikaziPrimljene = true;
+                break;
+            case "opcija2":
+                prikaziPoslate = true;
+                prikaziPrimljene = false;
+                break;
+            case "opcija3":
+                prikaziPoslate = false;
+                prikaziPrimljene = true;
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void OnChangeListSeen(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string> args)
+    {
+        var itemData = JsonConvert.DeserializeObject<Polje>(args.ItemData != null ? args.ItemData.ToString() : "");
+
+        switch (itemData.Id)
+        {
+            case "opcija1":
+                prikaziPregledane = true;
+                prikaziNepregledane = true;
+                break;
+            case "opcija2":
+                prikaziPregledane = true;
+                prikaziNepregledane = false;
+                break;
+            case "opcija3":
+                prikaziPregledane = false;
+                prikaziNepregledane = true;
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void OnChangeListFilter(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string> args)
+    {
+        var itemData = JsonConvert.DeserializeObject<Polje>(args.ItemData != null ? args.ItemData.ToString() : "");
+        kriterijumFTekst = itemData.Id;
+
+        switch (kriterijumFTekst)
+        {
+            case "opcija1":
+                kriterijumF = kriterijumFKorisnickoIme;
+                break;
+            case "opcija2":
+                kriterijumF = i => i.Oglas.NaslovOglasa;
+                break;
+            case "opcija3":
+                kriterijumF = i => i.Oglas.DatumVazenja.ToString("yyyy.MM.dd");
+                break;
+            case "opcija4":
+                if (Korisnik.UserName == null)
+                    kriterijumF = i => (5 - i.Oglas.KorisnikUsluge.ProsecnaOcena).ToString();
+                else
+                    kriterijumF = i => (5 - i.Ucesnik.ProsecnaOcena).ToString();
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void OnChangeListTip(MultiSelectChangeEventArgs<TipUsluge[]> args)
+    {
+        var itemData = args.Value;
+        if (itemData == null)
+        {
+            itemData = (TipUsluge[])Enum.GetValues(typeof(TipUsluge));
+        }
+        kriterijumT = 0;
+        foreach (var tip in itemData)
+        {
+            kriterijumT = kriterijumT | tip;
+        }
+        this.StateHasChanged();
+    }
+
+
+    protected async override Task OnInitializedAsync()
+    {
+        Ucitan = false;
+        var state = await authenticationStateProvider.GetAuthenticationStateAsync();
+        if (state.User.IsInRole("PruzalacUsluge"))
+        {
+            Pruzalac = await dbContext.VratiPruzaoca(state.User.Identity.Name);
+            foreach (var tipUsluge in (TipUsluge[])Enum.GetValues(typeof(TipUsluge)))
+            {
+                kriterijumT = kriterijumT | tipUsluge;
+                if ((Pruzalac.TipUsluga & tipUsluge) != tipUsluge)
+                    continue;
+                PoljeTip novoPolje = new PoljeTip(tipUsluge);
+                listaT.Add(novoPolje);
+            }
+            foreach (var zahtev in Pruzalac.MojiZahtevi)//dodato
+            {
+                if (zahtev.Oglas.ProveriDaLiVazi())
+                {
+                    dbContext.Update(zahtev.Oglas);
+                    await dbContext.SaveChangesAsync();
+                }
+                if (zahtev.Oglas.Stanje != Stanje.Aktivan)
+                {
+                    if (!zahtev.Pregledan)
+                    {
+                        zahtev.Pregledan = true;
+                        dbContext.Update(zahtev);
+                        await dbContext.SaveChangesAsync();
+                    }
+                }
+                Zahtevi.Add(zahtev);
+            }
+        }
+        else if (state.User.IsInRole("KorisnikUsluge"))
+        {
+            kriterijumFKorisnickoIme = i => i.Ucesnik.UserName;
+            foreach (var tipUsluge in (TipUsluge[])Enum.GetValues(typeof(TipUsluge)))
+            {
+                kriterijumT = kriterijumT | tipUsluge;
+                PoljeTip novoPolje = new PoljeTip(tipUsluge);
+                listaT.Add(novoPolje);
+            }
+            Korisnik = await dbContext.VratiKorisnika(state.User.Identity.Name);
+
+            foreach (var oglas in Korisnik.MojiOglasi)
+            {
+                if (oglas.ProveriDaLiVazi())
+                {
+                    dbContext.Update(oglas);
+                    await dbContext.SaveChangesAsync();
+                }
+                foreach (var zahtev in oglas.Zahtevi)
+                {
+                    if (oglas.Stanje != Stanje.Aktivan)
+                    {
+                        if (!zahtev.Pregledan)
+                        {
+                            zahtev.Pregledan = true;
+                            dbContext.Update(zahtev);
+                            await dbContext.SaveChangesAsync();
+                        }
+                    }
+                    Zahtevi.Add(zahtev);
+                }
+            }
+        }
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender && !Redirect)
+        {
+            Ucitan = true;
+            StateHasChanged();
+        }
+
+    }
+
+    private async Task OtvoriKorisnika(string userNameKorisnika, Zahtev zahtev, bool jeKorisnik)
+    {
+        if (jeKorisnik)
+        {
+
+            if (!zahtev.Pregledan && zahtev.Naslov != Korisnik.UserName)
+            {
+                Redirect = true;
+                Ucitan = false;
+                zahtev.Pregledan = true;
+                dbContext.Update(zahtev);
+                await dbContext.SaveChangesAsync();
+                navMenager.NavigateTo("Profil/" + zahtev.Ucesnik.Id, true);
+            }
+            else
+                navMenager.NavigateTo("Profil/" + zahtev.Ucesnik.Id);
+        }
+        else
+        {
+            if (!zahtev.Pregledan && zahtev.Naslov != Pruzalac.UserName)
+            {
+                Redirect = true;
+                Ucitan = false;
+                zahtev.Pregledan = true;
+                dbContext.Update(zahtev);
+                await dbContext.SaveChangesAsync();
+                navMenager.NavigateTo("Profil/" + zahtev.Oglas.KorisnikUsluge.Id, true);
+            }
+            else
+                navMenager.NavigateTo("Profil/" + zahtev.Oglas.KorisnikUsluge.Id);
+        }
+    }
+
+    private async Task OtvoriOglas(Guid idOglasa, Zahtev zahtev, bool jeKorisnik)
+    {
+        if (jeKorisnik)
+        {
+            if (!zahtev.Pregledan && zahtev.Naslov != Korisnik.UserName)
+            {
+                Redirect = true;
+                Ucitan = false;
+                zahtev.Pregledan = true;
+                dbContext.Update(zahtev);
+                await dbContext.SaveChangesAsync();
+                navMenager.NavigateTo("Oglas/" + idOglasa.ToString(), true);
+            }
+            else
+                navMenager.NavigateTo("Oglas/" + idOglasa.ToString());
+        }
+        else
+        {
+            if (!zahtev.Pregledan && zahtev.Naslov != Pruzalac.UserName)
+            {
+                Redirect = true;
+                Ucitan = false;
+                zahtev.Pregledan = true;
+                dbContext.Update(zahtev);
+                await dbContext.SaveChangesAsync();
+                navMenager.NavigateTo("Oglas/" + idOglasa.ToString(), true);
+            }
+            else
+                navMenager.NavigateTo("Oglas/" + idOglasa.ToString());
+        }
+    }
+
+    private async Task PotvrdiZahtev(Guid idZahteva)
+    {
+        var zahtev = await dbContext.nadjiZahtev(idZahteva);
+        var izmenjenaEvidencija = await dbContext.nadjiEvidenciju(zahtev.Oglas.Id, zahtev.Ucesnik.Id);
+        zahtev.Oglas.ProveriDaLiVazi();
+        if (zahtev.Oglas.Stanje == Stanje.Aktivan)
+        {
+            izmenjenaEvidencija.Prijavljen = true;
+            zahtev.Pregledan = true;
+            zahtev.Oglas.Stanje = Stanje.UIzvršavanju;
+            zahtev.Oglas.OdabranPruzalac = zahtev.Ucesnik;
+            dbContext.Update(zahtev.Oglas);
+            dbContext.Update(izmenjenaEvidencija);
+            dbContext.Update(zahtev);
+            await dbContext.SaveChangesAsync();
+            this.VisibilityUspesan = true;
+
+        }
+        else
+        {
+            this.VisibilityNeuspesan = true;
+        }
+    }
+
+    private void DlgButtonClickUspesno()
+    {
+        this.VisibilityUspesan = false;
+        navMenager.NavigateTo("/MojiZahtevi", true);
+    }
+
+    private void DlgButtonClickNeuspesno()
+    {
+        this.VisibilityNeuspesan = false;
+        navMenager.NavigateTo("/MojiZahtevi", true);
+    }
+}

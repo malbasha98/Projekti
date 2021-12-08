@@ -1,0 +1,431 @@
+﻿@page "/"
+@inject AuthenticationStateProvider authenticationStateProvider
+@inject NavigationManager navMenager
+@inject MySqlCRUD dbContext
+@using Newtonsoft.Json;
+
+@using System.Text.RegularExpressions;
+
+<AuthorizeView>
+    <Authorized>
+    </Authorized>
+
+    <NotAuthorized>
+
+        <h1 style="text-align:center">KUĆNI POSLOVI</h1>
+        <label style="text-align:center">Ponuda i potražnja honorarnih poslova vezanih za pomoć u kući - dadilje, negovatelji, kućni pomoćnici, čuvari kućnih ljubimaca, baštovani</label>
+        <br />
+        <h3 style="text-align:center">REGISTRUJ SE ODMAH!</h3>
+        <div class="kontejnerZaSlike">
+            <div class="kontejner">
+                <img class="mojaSlika" src="PruzalacUslugeIndex.jpg" />
+                <div @onclick="NavPruzalac" class="sredina">
+                    <div class="tekst">@tekstPruzalac</div>
+                </div>
+            </div>
+            <div class="kontejner">
+                <img class="mojaSlika" src="KorisnikUslugeIndex3.png" />
+                <div @onclick="NavKorisnik" class="sredina">
+                    <div class="tekst">@tekstKorisnik</div>
+                </div>
+            </div>
+        </div>
+
+    </NotAuthorized>
+</AuthorizeView>
+
+<AuthorizeView Roles="KorisnikUsluge">
+    <Authorized>
+        @if (!Ucitan)
+        {
+            <div class="sk-circle">
+                <div class="sk-circle1 sk-child"></div>
+                <div class="sk-circle2 sk-child"></div>
+                <div class="sk-circle3 sk-child"></div>
+                <div class="sk-circle4 sk-child"></div>
+                <div class="sk-circle5 sk-child"></div>
+                <div class="sk-circle6 sk-child"></div>
+                <div class="sk-circle7 sk-child"></div>
+                <div class="sk-circle8 sk-child"></div>
+                <div class="sk-circle9 sk-child"></div>
+                <div class="sk-circle10 sk-child"></div>
+                <div class="sk-circle11 sk-child"></div>
+                <div class="sk-circle12 sk-child"></div>
+            </div>
+        }
+        else
+        {
+
+            <h1>Dobrodošao/la @context.User.Identity.Name</h1>
+            <div style="margin:3px">
+                <SfButton CssClass="e-success" @onclick="NoviOglas">Novi oglas</SfButton>
+            </div>
+        <div>
+
+            <h4>Preporučeni pružaoci usluga:</h4>
+            @if (preporuceniPruzaoci.Count == 0)
+            {
+                <label>Trenutno nema potencijalnih pružaoca za Vaše oglase.</label>
+            }
+            else
+            {
+                <div class="row col-10 mb-3" style="display:flex; align-items:center">
+                    <label style="margin-bottom:auto; margin-top:auto">Filtriraj prikaz po: &ensp;</label>
+                    <span style="margin-bottom:auto; margin-top:auto">
+                        <SfDropDownList Index="0" TItem="Polje" TValue="string" DataSource="@listaK">
+                            <DropDownListEvents TValue="string" ValueChange="OnChangeListKorisnik"></DropDownListEvents>
+                            <DropDownListFieldSettings Text="Tekst" Value="Id"></DropDownListFieldSettings>
+                        </SfDropDownList>
+                    </span>
+                    &ensp;
+                    <label style="margin-bottom:auto; margin-top:auto">Za tip usluge: &ensp;</label>
+                    <span style="margin-bottom:auto; margin-top:auto">
+                        <SfMultiSelect @bind-Value="@selektovaneUsluge" Mode="VisualMode.CheckBox" Placeholder="Tipovi usluga" DataSource="@listaT" ShowDropDownIcon="true" EnableSelectionOrder="false" AllowFiltering="false" ShowSelectAll="true" UnSelectAllText="poništi" SelectAllText="svi tipovi" Width="250px">
+                            <MultiSelectEvents TValue="TipUsluge[]" ValueChange="OnChangeListTip"></MultiSelectEvents>
+                            <MultiSelectFieldSettings Text="Tekst" Value="TipUsluge"></MultiSelectFieldSettings>
+                        </SfMultiSelect>
+                    </span>
+                </div>
+
+                @foreach (var p in preporuceniPruzaoci.OrderBy(kriterijumK).Where(x => (x.TipUsluga & kriterijumT) != 0))
+                {
+                    var idPruzaoca = p.Id;
+                    var zaSlanje = p;
+                    <div class="row col-7 p-2 bg-light m-2" style="border:1px groove papayawhip; cursor:pointer" @onclick="@(e => PrikaziProfil(idPruzaoca))">
+                        <div style="width:50px">
+                            <img src="@p.PutanjaDoSlike" style="vertical-align: middle; width: 50px; height: 50px; border-radius: 50%;" />
+                        </div>
+                        <div class="mb-3">
+                            <div style="padding-left: 6px; font-weight:bold">@p.UserName</div>
+                            <div style="padding-left: 6px; font-style:italic">@(p.Ime + " " + p.Prezime)</div>
+                            <div style="padding-left: 6px; font-size:11px; font-weight:bold">@Usluga(zaSlanje)</div>
+                            <div style="padding-left: 6px; font-weight:bold">Ocena: @(p.ProsecnaOcena.ToString() + "/5")</div>
+                            <div style="padding:6px 0px 0px 6px">@p.Opis</div>
+
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+        }
+    </Authorized>
+
+    <NotAuthorized>
+    </NotAuthorized>
+</AuthorizeView>
+
+<AuthorizeView Roles="PruzalacUsluge">
+    <Authorized>
+        @if (!Ucitan)
+        {
+            <div class="sk-circle">
+                <div class="sk-circle1 sk-child"></div>
+                <div class="sk-circle2 sk-child"></div>
+                <div class="sk-circle3 sk-child"></div>
+                <div class="sk-circle4 sk-child"></div>
+                <div class="sk-circle5 sk-child"></div>
+                <div class="sk-circle6 sk-child"></div>
+                <div class="sk-circle7 sk-child"></div>
+                <div class="sk-circle8 sk-child"></div>
+                <div class="sk-circle9 sk-child"></div>
+                <div class="sk-circle10 sk-child"></div>
+                <div class="sk-circle11 sk-child"></div>
+                <div class="sk-circle12 sk-child"></div>
+            </div>
+        }
+        else
+        {
+            <h1>Dobrodošao/la @context.User.Identity.Name</h1>
+        <div>
+
+            <h4>Preporučeni oglasi:</h4>
+            @if (preporuceniOglasi.Count == 0)
+            {
+                <label>Trenutno nema preporučenih oglasa za Vas.</label>
+            }
+            else
+            {
+                <div class="row col-10 mb-3" style="display:flex; align-items:center">
+                    <label style="margin-bottom:auto; margin-top:auto">Filtriraj prikaz po: &ensp;</label>
+                    <span style="margin-bottom:auto; margin-top:auto">
+                        <SfDropDownList Index="0" TItem="Polje" TValue="string" DataSource="@listaK">
+                            <DropDownListEvents TValue="string" ValueChange="OnChangeListKorisnik"></DropDownListEvents>
+                            <DropDownListFieldSettings Text="Tekst" Value="Id"></DropDownListFieldSettings>
+                        </SfDropDownList>
+                    </span>
+                    &ensp;
+                    <label style="margin-bottom:auto; margin-top:auto">Za tip usluge: &ensp;</label>
+                    <span style="margin-bottom:auto; margin-top:auto">
+                        <SfMultiSelect @bind-Value="@selektovaneUsluge" Mode="VisualMode.CheckBox" Placeholder="Tipovi usluga" DataSource="@listaT" ShowDropDownIcon="true" EnableSelectionOrder="false" AllowFiltering="false" ShowSelectAll="true" UnSelectAllText="poništi" SelectAllText="svi tipovi" Width="250px">
+                            <MultiSelectEvents TValue="TipUsluge[]" ValueChange="OnChangeListTip"></MultiSelectEvents>
+                            <MultiSelectFieldSettings Text="Tekst" Value="TipUsluge"></MultiSelectFieldSettings>
+                        </SfMultiSelect>
+                    </span>
+                </div>
+
+                @foreach (var oglas in preporuceniOglasi.OrderBy(kriterijumP).Where(x => (x.TipUsluge & kriterijumT) == x.TipUsluge))
+                {
+
+                    var idOglasa = oglas.Id;
+                    <div class="row col-7 p-2 bg-light m-2" style="border:1px groove papayawhip; cursor:pointer" @onclick="@(e => PrikaziOglas(idOglasa))">
+                        <img src="@oglas.KorisnikUsluge.PutanjaDoSlike" style="vertical-align: middle; width: 50px; height: 50px; border-radius: 50%;" />
+                        <div class="mb-3">
+                            <div style="padding-left: 6px; font-weight:bold">@oglas.NaslovOglasa</div>
+                            <div style="padding-left: 6px">
+                                @(oglas.KorisnikUsluge.UserName + " - ")
+                                <label style="font-style:italic">@(oglas.KorisnikUsluge.Ime + " " + oglas.KorisnikUsluge.Prezime) </label>
+                            </div>
+                            <div style="padding-left: 6px; font-weight:bold">@("Važi do: " + oglas.DatumVazenja.ToShortDateString())</div>
+                            <div style="padding-left: 6px">Ocena vlasnika: @(oglas.KorisnikUsluge.ProsecnaOcena.ToString() + "/5")</div>
+                            <div style="padding:6px 0px 0px 6px">@oglas.Opis</div>
+                        </div>
+                    </div>
+                }
+
+            }
+
+        </div>
+        }
+    </Authorized>
+
+    <NotAuthorized>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code
+{
+    private bool Ucitan { get; set; } = false;
+
+    private string tekstKorisnik = "Treba Vam pomoć u kući? Registrujte se kao Korisnik usluge, postavite oglas za posao i pronađite osobu koja Vam može pomoći!";
+    private string tekstPruzalac = "Tražite honorarni posao vezan za pomoć u kući? Registrujte se kao Pružalac usluge i pronađite odgovarajući posao!";
+
+    private KorisnikUsluge Korisnik = new KorisnikUsluge();
+    private PruzalacUsluge Pruzalac = new PruzalacUsluge();
+
+    private List<PruzalacUsluge> preporuceniPruzaoci = new List<PruzalacUsluge>();
+    private Func<PruzalacUsluge, string> kriterijumK = i => i.UserName;
+    private string kriterijumKTekst;
+
+    private class Polje
+    {
+        public string Id { get; set; }
+        public string Tekst { get; set; }
+
+        public Polje() { }
+    }
+    public class PoljeTip
+    {
+        public TipUsluge TipUsluge { get; set; }
+        public string Tekst { get; set; }
+
+        public PoljeTip() { }
+
+        public PoljeTip(TipUsluge usluga)
+        {
+            TipUsluge = usluga;
+            string[] split = Regex.Split(usluga.ToString(), @"(?<!^)(?=[A-Z])");
+            string ceo = "";
+            foreach (var rec in split)
+            {
+                ceo += rec + " ";
+            }
+            Tekst = ceo;
+        }
+    }
+
+    private TipUsluge kriterijumT;
+    private List<PoljeTip> listaT = new List<PoljeTip>();
+    private TipUsluge[] selektovaneUsluge = null;
+
+    private List<Polje> listaK = new List<Polje>()
+{
+        new Polje() { Id = "opcija1", Tekst = "korisničkom imenu"},
+        new Polje() { Id = "opcija2", Tekst = "imenu"},
+        new Polje() { Id = "opcija3", Tekst = "prezimenu"},
+        new Polje() { Id = "opcija4", Tekst = "prosečnoj oceni"}
+    };
+
+    private void OnChangeListKorisnik(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string> args)
+    {
+        var itemData = JsonConvert.DeserializeObject<Polje>(args.ItemData != null ? args.ItemData.ToString() : "");
+        kriterijumKTekst = itemData.Id;
+
+        switch (kriterijumKTekst)
+        {
+            case "opcija1":
+                kriterijumK = i => i.UserName;
+                break;
+            case "opcija2":
+                kriterijumK = i => i.Ime;
+                break;
+            case "opcija3":
+                kriterijumK = i => i.Prezime;
+                break;
+            case "opcija4":
+                kriterijumK = i => (5 - i.ProsecnaOcena).ToString();
+                break;
+            default:
+                break;
+        }
+    }
+
+    private List<Oglas> preporuceniOglasi = new List<Oglas>();
+    private Func<Oglas, string> kriterijumP = i => i.DatumVazenja.ToString();
+    private string kriterijumPTekst;
+
+    private List<Polje> listaP = new List<Polje>()
+{
+        new Polje() { Id = "opcija1", Tekst = "datumu važenja"},
+        new Polje() { Id = "opcija2", Tekst = "prosečnoj oceni vlasnika"},
+        new Polje() { Id = "opcija3", Tekst = "naslovu"}
+    };
+
+    private void OnChangeListPruzalac(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string> args)
+    {
+        var itemData = JsonConvert.DeserializeObject<Polje>(args.ItemData != null ? args.ItemData.ToString() : "");
+        kriterijumPTekst = itemData.Id;
+
+        switch (kriterijumPTekst)
+        {
+            case "opcija1":
+                kriterijumP = i => i.DatumVazenja.ToString("yyyy.MM.dd");
+                break;
+            case "opcija2":
+                kriterijumP = i => (5 - i.KorisnikUsluge.ProsecnaOcena).ToString();
+                break;
+            case "opcija3":
+                kriterijumP = i => i.NaslovOglasa;
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void OnChangeListTip(MultiSelectChangeEventArgs<TipUsluge[]> args)
+    {
+        var itemData = args.Value;
+        if (itemData == null)
+        {
+            itemData = (TipUsluge[])Enum.GetValues(typeof(TipUsluge));
+        }
+        kriterijumT = 0;
+        foreach (var tip in itemData)
+        {
+            kriterijumT = kriterijumT | tip;
+        }
+        this.StateHasChanged();
+    }
+
+
+    private void NoviOglas()
+    {
+        navMenager.NavigateTo("NoviOglas",true);
+    }
+
+    private void NavKorisnik()
+    {
+        navMenager.NavigateTo("/RegistrujKorisnika", true);
+    }
+
+    private void NavPruzalac()
+    {
+        navMenager.NavigateTo("/RegistrujPruzaoca", true);
+    }
+
+    protected async override Task OnInitializedAsync()
+    {
+        Ucitan = false;
+        var state = await authenticationStateProvider.GetAuthenticationStateAsync();
+
+        if (state.User.IsInRole("PruzalacUsluge"))
+        {
+            Pruzalac = await dbContext.VratiPruzaoca(state.User.Identity.Name);
+            foreach (var tipUsluge in (TipUsluge[])Enum.GetValues(typeof(TipUsluge)))
+            {
+                kriterijumT = kriterijumT | tipUsluge;
+                if ((Pruzalac.TipUsluga & tipUsluge) != tipUsluge)
+                    continue;
+                PoljeTip novoPolje = new PoljeTip(tipUsluge);
+                listaT.Add(novoPolje);
+            }
+            foreach (var ev in Pruzalac.Evidencije)
+            {
+                var oglas = ev.Oglas;
+                if (oglas.ProveriDaLiVazi())
+                {
+                    dbContext.Update(oglas);
+                    await dbContext.SaveChangesAsync();
+                }
+                if (oglas.Stanje == Stanje.Aktivan)//ne dodavati ako je poslat zahtev
+                {
+                    if (await dbContext.PostojiZahtevKaKorisniku(Pruzalac.Id, oglas.Id))
+                        continue;
+                    preporuceniOglasi.Add(oglas);
+                }
+
+            }
+        }
+        else if (state.User.IsInRole("KorisnikUsluge"))
+        {
+            foreach (var tipUsluge in (TipUsluge[])Enum.GetValues(typeof(TipUsluge)))
+            {
+                kriterijumT = kriterijumT | tipUsluge;
+                PoljeTip novoPolje = new PoljeTip(tipUsluge);
+                listaT.Add(novoPolje);
+            }
+            Korisnik = await dbContext.VratiKorisnika(state.User.Identity.Name);
+            foreach (var oglas in Korisnik.MojiOglasi)
+            {
+                if (oglas.ProveriDaLiVazi())
+                {
+                    dbContext.Update(oglas);
+                    await dbContext.SaveChangesAsync();
+                }
+                if (oglas.Stanje == Stanje.Aktivan)
+                {
+                    foreach (var ev in oglas.Evidencije)
+                    {
+                        var postoji = await dbContext.PostojiZahtevKaPruzaocu(Korisnik.UserName, ev.PruzalacUsluge.Id, oglas.Id);
+                        if (!preporuceniPruzaoci.Contains(ev.PruzalacUsluge) && !postoji)
+                            preporuceniPruzaoci.Add(ev.PruzalacUsluge);
+                    }
+                }
+            }
+        }
+        
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            Ucitan = true;
+            StateHasChanged();
+        }
+
+    }
+
+    private void PrikaziProfil(string id)
+    {
+        Ucitan = false;
+        navMenager.NavigateTo("Profil/" + id);
+    }
+
+    private void PrikaziOglas(Guid id)
+    {
+        navMenager.NavigateTo("Oglas/" + id.ToString());
+    }
+
+    private string Usluga(PruzalacUsluge p)
+    {
+        string s = "";
+        foreach (TipUsluge tip in (TipUsluge[])Enum.GetValues(typeof(TipUsluge)))
+        {
+            if ((p.TipUsluga & tip) == tip)
+                s += tip.ToString() + ", ";
+        }
+        if (s != "")
+            s = s.Remove(s.Length - 2);
+        return s;
+    }
+}

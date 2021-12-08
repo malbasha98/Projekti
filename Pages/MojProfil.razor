@@ -1,0 +1,433 @@
+﻿@page "/MojProfil"
+@using System.Text.RegularExpressions;
+@using System.IO;
+@using Newtonsoft.Json;
+@using System.ComponentModel.DataAnnotations;
+@inject AuthenticationStateProvider authenticationStateProvider
+@inject UserManager<IdentityUser> userManager
+@inject MySqlCRUD dbContext
+@inject NavigationManager navMenager
+@inject HttpClient Http
+
+@if (!Ucitan)
+{
+    <div class="sk-circle">
+        <div class="sk-circle1 sk-child"></div>
+        <div class="sk-circle2 sk-child"></div>
+        <div class="sk-circle3 sk-child"></div>
+        <div class="sk-circle4 sk-child"></div>
+        <div class="sk-circle5 sk-child"></div>
+        <div class="sk-circle6 sk-child"></div>
+        <div class="sk-circle7 sk-child"></div>
+        <div class="sk-circle8 sk-child"></div>
+        <div class="sk-circle9 sk-child"></div>
+        <div class="sk-circle10 sk-child"></div>
+        <div class="sk-circle11 sk-child"></div>
+        <div class="sk-circle12 sk-child"></div>
+    </div>
+}
+else
+{
+    <AuthorizeView>
+        <NotAuthorized>
+            <h2>Nema nista na ovoj stranici</h2>
+        </NotAuthorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="KorisnikUsluge" Context="authContext">
+        <Authorized>
+            <div style="display:flex">
+                <EditForm style="width:50%; margin-right:10px" Model="izmenaKorisnik" OnValidSubmit="IzmeniProfilKorisnika" Context="formContext">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="form-group">
+                        <label>Ime:</label>
+                        <InputText @bind-Value="izmenaKorisnik.Ime" class="form-control"></InputText>
+                    </div>
+                    <div class="form-group">
+                        <label>Prezime:</label>
+                        <InputText @bind-Value="izmenaKorisnik.Prezime" class="form-control"></InputText>
+                    </div>
+                    <div class="form-group">
+                        <label>Datum rodjenja:</label>
+                        <InputDate @bind-Value="izmenaKorisnik.DatumRodjenja" class="form-control"></InputDate>
+                    </div>
+                    <div class="form-group">
+                        <label>Broj telefona:</label>
+                        <InputText @bind-Value="izmenaKorisnik.PhoneNumber" class="form-control"></InputText>
+                    </div>
+                    <div class="form-group">
+                        <label>Opis:</label>
+                        <InputTextArea @bind-Value="izmenaKorisnik.Opis" class="form-control"></InputTextArea>
+                    </div>
+
+                    <button type="submit">Sačuvaj izmene</button>
+                </EditForm>
+
+                <SfDialog Width="335px" IsModal="true" @bind-Visible="@VisibilityGlavni">
+                    <DialogTemplates>
+                        <Header> Obaveštenje</Header>
+                        <Content> <p>Izmene uspešno sačuvane! Da li želite da nastavite sa ažuiriranjem profila ili da se vratite na profilnu stranicu</p> </Content>
+                    </DialogTemplates>
+                    <DialogButtons>
+                        <DialogButton OnClick="@VrtaiNaProfil">
+                            <DialogButtonModel Content="Vrati se na profilnu stranicu" IsPrimary="true"></DialogButtonModel>
+                        </DialogButton>
+                        <DialogButton OnClick="@(() => VisibilityGlavni = false)">
+                            <DialogButtonModel Content="Nastavi sa ažuiriranjem"></DialogButtonModel>
+                        </DialogButton>
+                    </DialogButtons>
+                    <DialogAnimationSettings Effect="@DialogEffect.FadeZoom"></DialogAnimationSettings>
+                </SfDialog>
+
+                <div style="width:50%; margin:3px">
+                    <img src="@slika" width="200" height="200" />
+
+                    <div style="margin:5px">
+                        <SfButton @onclick="@(() => AzurirajSliku = true)">Azuriraj Sliku</SfButton>
+                        <SfButton @onclick="@(() => Visibility = true)">Obriši Sliku</SfButton>
+                        <SfButton @onclick="SacuvajSliku">Sačuvaj izmene slike</SfButton>
+                    </div>
+
+                    @if (AzurirajSliku)
+                    {
+                        <div style="margin-top:3px">
+                            <SfUploader AllowedExtensions="image/*" Multiple="false">
+                                <UploaderEvents OnRemove="onRemove" ValueChange="OnChange"></UploaderEvents>
+                            </SfUploader>
+                        </div>
+
+                    }
+
+                    <SfDialog Width="335px" IsModal="true" @bind-Visible="@Visibility">
+                        <DialogTemplates>
+                            <Header> Obaveštenje</Header>
+                            <Content> <p>Da li ste sigurni da želite da obrišete sliku</p> </Content>
+                        </DialogTemplates>
+                        <DialogButtons>
+                            <DialogButton OnClick="@ObrisiSliku">
+                                <DialogButtonModel Content="Da, siguran sam" IsPrimary="true"></DialogButtonModel>
+                            </DialogButton>
+                            <DialogButton OnClick="@(() => Visibility = false)">
+                                <DialogButtonModel Content="Odustani"></DialogButtonModel>
+                            </DialogButton>
+                        </DialogButtons>
+                        <DialogAnimationSettings Effect="@DialogEffect.FadeZoom"></DialogAnimationSettings>
+                    </SfDialog>
+
+                    <EditForm style="margin-top: 3px" Model="NovaSifra" OnValidSubmit="AzurirajSifru">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+
+                        <div class="form-group">
+                            <label>Trenutna šifra:</label>
+                            <label>@NovaSifra.errorZaSifre</label>
+                            <InputText type="password" @bind-Value="NovaSifra.trenutnaSifra" class="form-control"></InputText>
+                        </div>
+                        <div class="form-group">
+                            <label>Nova šifra: (šifra mora da sadrži jedno veliko slovo, jedno malo slovo, jedan znak i jedan broj)</label>
+                            <InputText type="password" @bind-Value="NovaSifra.novaSifra" class="form-control"></InputText>
+                        </div>
+                        <div class="form-group">
+                            <label>Potvrdi novu šifru:</label>
+                            <InputText type="password" @bind-Value="NovaSifra.opetNovaSifra" class="form-control"></InputText>
+                        </div>
+                        <button type="submit">Promeni šifru</button>
+                    </EditForm>
+                </div>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="PruzalacUsluge" Context="authContext">
+        <Authorized>
+            <div style="display:flex ">
+                <EditForm style="width:50%;margin-right:10px" Model="izmenaPruzalac" OnValidSubmit="IzmeniProfilPruzaoca" Context="formContext">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="form-group">
+                        <label>Ime:</label>
+                        <InputText @bind-Value="izmenaPruzalac.Ime" class="form-control"></InputText>
+                    </div>
+                    <div class="form-group">
+                        <label>Prezime:</label>
+                        <InputText @bind-Value="izmenaPruzalac.Prezime" class="form-control"></InputText>
+                    </div>
+                    <div class="form-group">
+                        <label>Datum rodjenja:</label>
+                        <InputDate @bind-Value="izmenaPruzalac.DatumRodjenja" class="form-control"></InputDate>
+                    </div>
+                    <div class="form-group">
+                        <label>Broj telefona:</label>
+                        <InputText @bind-Value="izmenaPruzalac.PhoneNumber" class="form-control"></InputText>
+                    </div>
+                    <div class="form-group">
+                        <label>Opis:</label>
+                        <InputTextArea @bind-Value="izmenaPruzalac.Opis" class="form-control"></InputTextArea>
+                    </div>
+
+                    <button type="submit">Sačuvaj izmene</button>
+                </EditForm>
+
+                <SfDialog Width="335px" IsModal="true" @bind-Visible="@VisibilityGlavni">
+                    <DialogTemplates>
+                        <Header> Obaveštenje</Header>
+                        <Content> <p>Izmene uspešno sačuvane! Da li želite da nastavite sa ažuiriranjem profila ili da se vratite na profilnu stranicu</p> </Content>
+                    </DialogTemplates>
+                    <DialogButtons>
+                        <DialogButton OnClick="@VrtaiNaProfil">
+                            <DialogButtonModel Content="Vrati se na profilnu stranicu" IsPrimary="true"></DialogButtonModel>
+                        </DialogButton>
+                        <DialogButton OnClick="@(() => VisibilityGlavni = false)">
+                            <DialogButtonModel Content="Nastavi sa ažuiriranjem"></DialogButtonModel>
+                        </DialogButton>
+                    </DialogButtons>
+                    <DialogAnimationSettings Effect="@DialogEffect.FadeZoom"></DialogAnimationSettings>
+                </SfDialog>
+
+                <div style="width:50%; margin:3px">
+                    <img src="@slika" width="200" height="200" />
+
+                    <div style="margin:5px">
+                        <SfButton @onclick="@(() => AzurirajSliku = true)">Azuriraj Sliku</SfButton>
+                        <SfButton @onclick="@(() => Visibility = true)">Obriši Sliku</SfButton>
+                        <SfButton @onclick="SacuvajSliku">Sačuvaj izmene slike</SfButton>
+                    </div>
+
+                    @if (AzurirajSliku)
+                    {
+                        <div style="margin-top:3px">
+                            <SfUploader AllowedExtensions="image/*" Multiple="false">
+                                <UploaderEvents OnRemove="onRemove" ValueChange="OnChange"></UploaderEvents>
+                            </SfUploader>
+                        </div>
+
+                    }
+
+                    <SfDialog Width="335px" IsModal="true" @bind-Visible="@Visibility">
+                        <DialogTemplates>
+                            <Header> Obaveštenje</Header>
+                            <Content> <p>Da li ste sigurni da želite da obrišete sliku</p> </Content>
+                        </DialogTemplates>
+                        <DialogButtons>
+                            <DialogButton OnClick="@ObrisiSliku">
+                                <DialogButtonModel Content="Da, siguran sam" IsPrimary="true"></DialogButtonModel>
+                            </DialogButton>
+                            <DialogButton OnClick="@(() => Visibility = false)">
+                                <DialogButtonModel Content="Odustani"></DialogButtonModel>
+                            </DialogButton>
+                        </DialogButtons>
+                        <DialogAnimationSettings Effect="@DialogEffect.FadeZoom"></DialogAnimationSettings>
+                    </SfDialog>
+
+                    <EditForm style="margin-top:3px" Model="NovaSifra" OnValidSubmit="AzurirajSifru">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+
+                        <div class="form-group">
+                            <label>Trenutna šifra:</label>
+                            <label>@NovaSifra.errorZaSifre</label>
+                            <InputText type="password" @bind-Value="NovaSifra.trenutnaSifra" class="form-control"></InputText>
+                        </div>
+                        <div class="form-group">
+                            <label>Nova šifra: (šifra mora da sadrži jedno veliko slovo, jedno malo slovo, jedan znak i jedan broj)</label>
+                            <InputText type="password" @bind-Value="NovaSifra.novaSifra" class="form-control"></InputText>
+                        </div>
+                        <div class="form-group">
+                            <label>Potvrdi novu šifru:</label>
+                            <InputText type="password" @bind-Value="NovaSifra.opetNovaSifra" class="form-control"></InputText>
+                        </div>
+                        <button type="submit">Promeni šifru</button>
+                    </EditForm>
+                </div>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+
+}
+    @code {
+        KorisnikUsluge izmenaKorisnik = new KorisnikUsluge();
+        PruzalacUsluge izmenaPruzalac = new PruzalacUsluge();
+        public bool Ucitan { get; set; } = false;
+
+        private bool VisibilityGlavni { get; set; } = false;
+        private bool korisnikUsluge { get; set; }
+        private bool Visibility { get; set; } = false;
+        private bool AzurirajSliku { get; set; } = false;
+        private string slika { get; set; }
+        private string prethodnaSlika { get; set; } = "";
+
+        private Sifra NovaSifra = new Sifra();
+
+        protected async override Task OnInitializedAsync()
+        {
+            Ucitan = false;
+            var state = await authenticationStateProvider.GetAuthenticationStateAsync();
+            if (state.User.IsInRole("PruzalacUsluge"))
+            {
+                izmenaPruzalac = await dbContext.VratiPruzaoca(state.User.Identity.Name);
+                slika = izmenaPruzalac.PutanjaDoSlike;
+                korisnikUsluge = false;
+            }
+            else if (state.User.IsInRole("KorisnikUsluge"))
+            {
+                izmenaKorisnik = await dbContext.VratiKorisnika(state.User.Identity.Name);
+                slika = izmenaKorisnik.PutanjaDoSlike;
+                korisnikUsluge = true;
+            }
+
+        }
+
+        protected async override Task OnAfterRenderAsync(bool firstRender)
+        {
+            if (!firstRender)
+            {
+                Ucitan = true;
+                StateHasChanged();
+            }
+
+        }
+
+        private async Task IzmeniProfilKorisnika()
+        {
+            dbContext.Update(izmenaKorisnik);
+            await dbContext.SaveChangesAsync();
+            VisibilityGlavni = true;
+        }
+        private async Task IzmeniProfilPruzaoca()
+        {
+            dbContext.Update(izmenaPruzalac);
+            await dbContext.SaveChangesAsync();
+            VisibilityGlavni = true;
+        }
+
+        private async Task AzurirajSifru()
+        {
+            bool rezultat;
+            if (korisnikUsluge)
+            {
+                NovaSifra.userName = izmenaKorisnik.UserName;
+                rezultat = await Http.PostJsonAsync<bool>("https://localhost:44341/api/Uploader/ZameniSifru", NovaSifra);
+
+            }
+            else
+            {
+                NovaSifra.userName = izmenaPruzalac.UserName;
+                rezultat = await Http.PostJsonAsync<bool>("https://localhost:44341/api/Uploader/ZameniSifru", NovaSifra);
+            }
+            if (!rezultat)
+            {
+                NovaSifra.errorZaSifre = "Doslo je do greske proverite ponovo šifre";
+            }
+            else
+                VisibilityGlavni = true;
+
+        }
+
+        private void OnChange(UploadChangeEventArgs args)
+        {
+            foreach (var file in args.Files)
+            {
+                if (slika != "Nema slike.png")
+                {
+                    if (korisnikUsluge && slika != izmenaKorisnik.PutanjaDoSlike)
+                        prethodnaSlika = slika;
+                    else if (!korisnikUsluge && slika != izmenaPruzalac.PutanjaDoSlike)
+                        prethodnaSlika = slika;
+                }
+
+                if (File.Exists(@"wwwroot/" + prethodnaSlika))
+                    File.Delete(@"wwwroot/" + prethodnaSlika);
+
+                slika = "KorisnickeSlike/" + Guid.NewGuid().ToString() + file.FileInfo.Name;
+                var celaPutanja = @"wwwroot/" + slika;
+                FileStream filestream = new FileStream(celaPutanja, FileMode.Create, FileAccess.Write);
+                file.Stream.WriteTo(filestream);
+                filestream.Close();
+                file.Stream.Close();
+            }
+        }
+
+        private void onRemove(RemovingEventArgs args)
+        {
+            if (File.Exists(@"wwwroot/" + slika))
+            {
+                File.Delete(@"wwwroot/" + slika);
+                if (korisnikUsluge)
+                    slika = izmenaKorisnik.PutanjaDoSlike;
+                else
+                    slika = izmenaPruzalac.PutanjaDoSlike;
+            }
+
+        }
+
+        private void ObrisiSliku()
+        {
+            if (korisnikUsluge)
+            {
+                if (izmenaKorisnik.PutanjaDoSlike != "Nema slike.png")
+                {
+                    if (File.Exists(@"wwwroot/" + izmenaKorisnik.PutanjaDoSlike))
+                    {
+                        File.Delete(@"wwwroot/" + izmenaKorisnik.PutanjaDoSlike);
+                        izmenaKorisnik.PutanjaDoSlike = "Nema slike.png";
+                        slika = "Nema slike.png";
+                    }
+                }
+            }
+            else
+            {
+                if (izmenaKorisnik.PutanjaDoSlike != "Nema slike.png")
+                {
+                    if (File.Exists(@"wwwroot/" + izmenaPruzalac.PutanjaDoSlike))
+                    {
+                        File.Delete(@"wwwroot/" + izmenaPruzalac.PutanjaDoSlike);
+                        izmenaPruzalac.PutanjaDoSlike = "Nema slike.png";
+                        slika = "Nema slike.png";
+                    }
+                }
+            }
+            this.Visibility = false;
+        }
+
+        private async Task SacuvajSliku()
+        {
+            if (korisnikUsluge)
+            {
+                if (izmenaKorisnik.PutanjaDoSlike != "Nema slike.png")
+                {
+                    if (File.Exists(@"wwwroot/" + izmenaKorisnik.PutanjaDoSlike))
+                    {
+                        File.Delete(@"wwwroot/" + izmenaKorisnik.PutanjaDoSlike);
+                    }
+                }
+                izmenaKorisnik.PutanjaDoSlike = slika;
+                dbContext.Update(izmenaKorisnik);
+                await dbContext.SaveChangesAsync();
+            }
+            else
+            {
+                if (izmenaPruzalac.PutanjaDoSlike != "Nema slike.png")
+                {
+                    if (File.Exists(@"wwwroot/" + izmenaPruzalac.PutanjaDoSlike))
+                    {
+                        File.Delete(@"wwwroot/" + izmenaPruzalac.PutanjaDoSlike);
+                    }
+                }
+                izmenaPruzalac.PutanjaDoSlike = slika;
+                dbContext.Update(izmenaPruzalac);
+                await dbContext.SaveChangesAsync();
+            }
+            this.VisibilityGlavni = true;
+        }
+
+        private void VrtaiNaProfil()
+        {
+            if (korisnikUsluge)
+                navMenager.NavigateTo("Profil/" + izmenaKorisnik.Id, true);
+            else
+                navMenager.NavigateTo("Profil/" + izmenaPruzalac.Id, true);
+        }
+    }

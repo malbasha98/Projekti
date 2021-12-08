@@ -1,0 +1,79 @@
+﻿@inject AuthenticationStateProvider authenticationStateProvider
+@inject MySqlCRUD dbContext
+
+
+    <div class="top-row pl-4 navbar navbar-dark" style="padding:0px; background:url(slika.png); background-repeat:no-repeat; background-size:250px 56px">
+        <a class="navbar-brand col-9" style=" height:100%; cursor:pointer; font-size:1px;" href="">
+            .
+        </a>
+
+        <button class="navbar-toggler col-2" style="width:30px;height:30px" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        
+    </div>
+
+<div class="@NavMenuCssClass" @onclick="ToggleNavMenu">
+    <ul class="nav flex-column">
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="oi oi-home" aria-hidden="true"></span> Home
+            </NavLink>
+        </li>
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="@("Profil/"+ Korisnik)">
+                <span class="oi oi-person" aria-hidden="true"></span> Moj Profil
+            </NavLink>
+        </li>
+        @if (rolaKorisnik)
+        {
+            <li class="nav-item px-3">
+                <NavLink class="nav-link" href="MojiOglasi">
+                    <span class="oi oi-spreadsheet" aria-hidden="true"></span> Moji Oglasi
+                </NavLink>
+            </li>
+        }
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="MojiZahtevi">
+                <span class="oi oi-bullhorn" aria-hidden="true"></span> Moji Zahtevi &ensp;
+                @if (NoviZahtevi > 0)
+                {
+                    <span class="badge badge-danger badge-pill">@NoviZahtevi</span>
+                }
+            </NavLink>
+        </li>
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="/PrethodneSaradnje">
+                <span class="oi oi-people" aria-hidden="true"></span> Prethodne Saradnje
+            </NavLink>
+        </li>
+    </ul>
+</div>
+
+
+@code {
+    [Parameter]
+    public string Korisnik { get; set; } = "";
+
+    [Parameter]
+    public int NoviZahtevi { get; set; } = 0;
+
+    private bool collapseNavMenu = true;
+    private bool rolaKorisnik = false;
+
+    private string brojNeprocitanihOglasa { get; set; }
+
+    private string NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+
+    protected async override Task OnInitializedAsync()
+    {
+        var state = await authenticationStateProvider.GetAuthenticationStateAsync();
+        if (state.User.IsInRole("KorisnikUsluge"))
+            rolaKorisnik = true;
+    }
+}

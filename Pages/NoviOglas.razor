@@ -1,0 +1,404 @@
+﻿@page "/NoviOglas"
+@page "/NoviOglas/{idZaIzmenu}"
+@using System.Text.RegularExpressions;
+@using System.IO;
+@using Newtonsoft.Json;
+@using System.Linq;
+@using Syncfusion.Blazor.SplitButtons 
+@inject AuthenticationStateProvider authenticationStateProvider
+@inject UserManager<IdentityUser> userManager
+@inject MySqlCRUD dbContext
+@inject NavigationManager navMenager
+
+<AuthorizeView Roles="KorisnikUsluge" Context="authContext">
+    <Authorized>
+        @if (!Ucitan)
+        {
+            <div class="sk-circle">
+                <div class="sk-circle1 sk-child"></div>
+                <div class="sk-circle2 sk-child"></div>
+                <div class="sk-circle3 sk-child"></div>
+                <div class="sk-circle4 sk-child"></div>
+                <div class="sk-circle5 sk-child"></div>
+                <div class="sk-circle6 sk-child"></div>
+                <div class="sk-circle7 sk-child"></div>
+                <div class="sk-circle8 sk-child"></div>
+                <div class="sk-circle9 sk-child"></div>
+                <div class="sk-circle10 sk-child"></div>
+                <div class="sk-circle11 sk-child"></div>
+                <div class="sk-circle12 sk-child"></div>
+            </div>
+        }
+        else
+        {
+
+        @if (daLiSeAzurira)
+        {
+            <h1>Ažuriraj oglas</h1>
+        }
+        else
+        {
+            <h1>Napravi novi oglas</h1>
+        }
+
+        <EditForm Model="novi" OnValidSubmit="PostaviOglas" Context="formContext">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="form-group">
+                <label>Naslov oglasa:</label>
+                <InputText @bind-Value="novi.NaslovOglasa" class="form-control"></InputText>
+            </div>
+            <div class="form-group">
+                <label>Opis oglasa:</label>
+                <InputTextArea @bind-Value="novi.Opis" class="form-control"></InputTextArea>
+            </div>
+            <div class="form-group">
+                <label>Datum važenja:</label>
+                <InputDate @bind-Value="novi.DatumVazenja" class="form-control"></InputDate>
+            </div>
+            @if (listaUcitana)
+            {
+                <div class="form-group">
+                    <label>Traže se</label>
+                    <SfDropDownList Index="@tipUsluge" TItem="Polje" TValue="TipUsluge" PopupHeight="230px" DataSource="@lista">
+                        <DropDownListEvents TValue="string" ValueChange="OnChangeList"></DropDownListEvents>
+                        <DropDownListFieldSettings Text="Tekst" Value="TipUsluge"></DropDownListFieldSettings>
+                    </SfDropDownList>
+                </div>
+            }
+
+
+            @if (daLiSeAzurira)
+            {
+                <div class="form-group row" style="margin-left:10px">
+                    @foreach (var slika in slikeOglasa)
+                    {
+                        var putanja = slika;
+                        if (slika != "")
+                        {
+                            <div class="column" style="margin-left:5px; margin-right:5px; margin-bottom:2px">
+                                <div style="text-align:center">
+                                    <img src="@(slika)" asp-append-version="true" style="width:auto;height:100px; cursor:pointer" />
+                                </div>
+                                <div style="text-align:center">
+                                    <SfButton CssClass="e-primary" @onclick="(e => ObrisiSliku(putanja))">Obriši sliku</SfButton>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="form-group">
+                    <SfProgressButton @ref="ProgressBtn" Duration="2000" Content="Sačuvaj" EnableProgress="true" CssClass="e-flat e-success" @onclick="@(() => spreciSubmit = false)">
+                        <ProgressButtonSpinSettings Position="SpinPosition.Center"></ProgressButtonSpinSettings>
+                        <ProgressButtonAnimationSettings Effect="AnimationEffect.SlideLeft"></ProgressButtonAnimationSettings>
+                        <ProgressButtonEvents Progressing="Progressing"></ProgressButtonEvents>
+                    </SfProgressButton>
+                </div>
+            }
+            else
+            {
+                <div class="form-group">
+                    <SfProgressButton @ref="ProgressBtn" Duration="2000" Content="Postavi oglas" EnableProgress="true" CssClass="e-flat e-success">
+                        <ProgressButtonSpinSettings Position="SpinPosition.Center"></ProgressButtonSpinSettings>
+                        <ProgressButtonAnimationSettings Effect="AnimationEffect.SlideLeft"></ProgressButtonAnimationSettings>
+                        <ProgressButtonEvents Progressing="Progressing"></ProgressButtonEvents>
+                    </SfProgressButton>
+                </div>
+            }
+
+        </EditForm>
+
+        <div class="form-group">
+            <SfUploader AllowedExtensions="image/*">
+                <UploaderEvents OnRemove="onRemove" ValueChange="OnChange"></UploaderEvents>
+            </SfUploader>
+        </div>
+
+
+
+
+        <SfDialog Width="335px" IsModal="true" @bind-Visible="@Visibility">
+            <DialogTemplates>
+                <Header> Obaveštenje</Header>
+                <Content>
+                    @if (daLiSeAzurira)
+                    {
+                        <p>
+                            Uspešno ažuriran oglas
+                        </p>
+                    }
+                    else
+                    {
+                        <p>
+                            Uspešno postavljen oglas
+                        </p>
+                    }
+
+                </Content>
+            </DialogTemplates>
+            <DialogButtons>
+                <DialogButton OnClick="@DlgButtonClick">
+                    <DialogButtonModel Content="OK" IsPrimary="true"></DialogButtonModel>
+                </DialogButton>
+            </DialogButtons>
+            <DialogAnimationSettings Effect="@DialogEffect.FadeZoom"></DialogAnimationSettings>
+        </SfDialog>
+
+        }
+    </Authorized>
+
+    <NotAuthorized>
+        <h2>Nema nista na ovoj stranici</h2>
+    </NotAuthorized>
+</AuthorizeView>
+
+
+
+@code
+{
+    [Parameter]
+    public string idZaIzmenu { get; set; }
+
+    private bool daLiSeAzurira { get; set; }
+    private string[] slikeOglasa;
+    private int tipUsluge = 0;
+    private bool spreciSubmit = false;
+
+    public bool Ucitan { get; set; } = false;
+
+    Oglas novi = new Oglas()
+    {
+        DatumVazenja = DateTime.Now.AddDays(30)
+    };
+    private List<Polje> lista;
+    private bool listaUcitana = false;
+    private bool Visibility { get; set; }
+    private string stil = "";
+    SfProgressButton ProgressBtn;
+    private TipUsluge RandomObjekat { get; set; }
+
+    public class Polje
+    {
+        public TipUsluge TipUsluge { get; set; }
+        public string Tekst { get; set; }
+
+        public Polje() { }
+
+        public Polje(TipUsluge usluga)
+        {
+            TipUsluge = usluga;
+            string[] split = Regex.Split(usluga.ToString(), @"(?<!^)(?=[A-Z])");
+            string ceo = "";
+            foreach (var rec in split)
+            {
+                ceo += rec + " ";
+            }
+            Tekst = ceo;
+        }
+    }
+
+    public void Progressing(Syncfusion.Blazor.SplitButtons.ProgressEventArgs args)
+    {
+        if (args.Percent == 60)
+        {
+            ProgressBtn.Stop();
+        }
+    }
+
+    protected async override Task OnInitializedAsync()
+    {
+        Ucitan = false;
+        Guid prosledjenId;
+        if (idZaIzmenu == null)
+        {
+            daLiSeAzurira = false;
+        }
+        else
+        {
+            daLiSeAzurira = true;
+            slikeOglasa = new string[0];
+        }
+        if (daLiSeAzurira && Guid.TryParse(idZaIzmenu, out prosledjenId))
+        {
+            novi = await dbContext.nadjiOglas(prosledjenId);
+            if (novi.PutanjeDoSlika != null)
+                slikeOglasa = novi.PutanjeDoSlika.Split('?');
+
+        }
+
+        this.lista = new List<Polje>();
+        foreach (var tipUsluge in (TipUsluge[])Enum.GetValues(typeof(TipUsluge)))
+        {
+            Polje novoPolje = new Polje(tipUsluge);
+            lista.Add(novoPolje);
+        }
+        listaUcitana = true;
+        if (daLiSeAzurira)
+        {
+            switch (novi.TipUsluge)
+            {
+                case TipUsluge.Dadilje:
+                    tipUsluge = 0;
+                    break;
+                case TipUsluge.Negovatelji:
+                    tipUsluge = 1;
+                    break;
+                case TipUsluge.KućniPomoćnici:
+                    tipUsluge = 2;
+                    break;
+                case TipUsluge.ČuvariKućnihLjubimaca:
+                    tipUsluge = 3;
+                    break;
+                case TipUsluge.Baštovani:
+                    tipUsluge = 4;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    private void OnChangeList(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string> args)
+    {
+        var itemData = JsonConvert.DeserializeObject<Polje>(args.ItemData != null ? args.ItemData.ToString() : "");
+        novi.TipUsluge = itemData.TipUsluge;
+
+
+    }
+
+    private async Task PostaviOglas()
+    {
+        if (spreciSubmit)
+            return;
+        if (novi.TipUsluge == 0)
+            novi.TipUsluge = TipUsluge.Dadilje;
+        List<PruzalacUsluge> potencijalniPruzaoci = dbContext.PruzaociUsluga.Where(x => (x.TipUsluga & novi.TipUsluge) == novi.TipUsluge).ToList();
+        if (daLiSeAzurira)
+        {
+
+            dbContext.Oglasi.Update(novi);
+            foreach (var ev in novi.Evidencije)
+            {
+                if ((ev.PruzalacUsluge.TipUsluga & novi.TipUsluge) != novi.TipUsluge)
+                {
+                    dbContext.Remove(ev);
+                }
+            }
+            foreach (var p in potencijalniPruzaoci)
+            {
+                if (novi.Evidencije.Find(x => x.PruzalacUsluge.Id == p.Id) != null)
+                    continue;
+                EvidencijaOglasa novaEvidencija = new EvidencijaOglasa()
+                {
+                    Oglas = novi,
+                    Prijavljen = false,
+                    PruzalacUsluge = p
+                };
+                novi.Evidencije.Add(novaEvidencija);
+
+                dbContext.EvidencijeOglasa.Add(novaEvidencija);
+            }
+            foreach (var zahtev in novi.Zahtevi)
+            {
+                dbContext.Remove(zahtev);
+            }
+        }
+        else
+        {
+            novi.Stanje = Stanje.Aktivan;
+            var state = await authenticationStateProvider.GetAuthenticationStateAsync();
+            KorisnikUsluge korisnikIzBaze = await dbContext.VratiKorisnika(state.User.Identity.Name);
+            novi.KorisnikUsluge = korisnikIzBaze;
+            dbContext.Oglasi.Add(novi);
+
+
+            foreach (var p in potencijalniPruzaoci)
+            {
+                EvidencijaOglasa novaEvidencija = new EvidencijaOglasa()
+                {
+                    Oglas = novi,
+                    Prijavljen = false,
+                    PruzalacUsluge = p
+                };
+                novi.Evidencije.Add(novaEvidencija);
+
+                dbContext.EvidencijeOglasa.Add(novaEvidencija);
+            }
+        }
+
+        ProgressBtn.Start();
+        await dbContext.SaveChangesAsync();
+        await ProgressBtn.ProgressComplete();
+
+        this.Visibility = true;
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender && daLiSeAzurira)
+        {
+            Ucitan = true;
+            StateHasChanged();
+        }
+        else if (!daLiSeAzurira)
+        {
+            Ucitan = true;
+            StateHasChanged();
+        }
+
+    }
+
+    private void DlgButtonClick()
+    {
+        this.Visibility = false;
+
+        navMenager.NavigateTo("Oglas/" + novi.Id); //Redirect na stranicu Oglas
+    }
+
+    private void OnChange(UploadChangeEventArgs args)
+    {
+        foreach (var file in args.Files)
+        {
+            var path = "SlikeOglasa/" + Guid.NewGuid().ToString() + file.FileInfo.Name;
+            var celaPutanja = @"wwwroot/" + path;
+            FileStream filestream = new FileStream(celaPutanja, FileMode.Create, FileAccess.Write);
+            file.Stream.WriteTo(filestream);
+            filestream.Close();
+            file.Stream.Close();
+            novi.PutanjeDoSlika += path + "?";
+            if (daLiSeAzurira)
+                slikeOglasa.Append(path);
+        }
+        var oglas = dbContext.Oglasi.Find(novi.Id);
+        if (oglas != null)
+        {
+            dbContext.Update(novi);
+        }
+    }
+
+    private void onRemove(RemovingEventArgs args)
+    {
+        String[] slike = novi.PutanjeDoSlika.Split('?');
+        foreach (var removeFile in args.FilesData)
+        {
+            foreach (var s in slike)
+            {
+                if (s.EndsWith(removeFile.Name))
+                {
+                    File.Delete(@"wwwroot/"+ s);
+                    int index = novi.PutanjeDoSlika.IndexOf(s);
+                    novi.PutanjeDoSlika = novi.PutanjeDoSlika.Remove(index, s.Length + 1);
+                }
+
+            }
+        }
+    }
+
+    private void ObrisiSliku(string putanja)
+    {
+        slikeOglasa = slikeOglasa.Where(x => x != putanja).ToArray();
+        novi.PutanjeDoSlika = novi.PutanjeDoSlika.Remove(novi.PutanjeDoSlika.IndexOf(putanja), putanja.Length + 1);
+        spreciSubmit = true;
+    }
+}

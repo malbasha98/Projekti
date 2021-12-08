@@ -1,0 +1,158 @@
+﻿@page "/RegistrujPruzaoca"
+@using Kucni_poslovi.Shared;
+@model RegistrujPruzaocaModel
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@using Syncfusion.EJ2.Inputs
+@using Kucni_poslovi.Data
+@using System.Text.RegularExpressions; 
+
+@{
+    ViewData["Title"] = "Registruj se";
+
+    foreach (var tipUsluge in (TipUsluge[])Enum.GetValues(typeof(TipUsluge)))
+    {
+        string[] split = Regex.Split(tipUsluge.ToString(), @"(?<!^)(?=[A-Z])");
+        string ceo = "";
+        foreach (var rec in split)
+        {
+            ceo += rec + " ";
+        }
+        Stavka nova = new Stavka() { Tekst = ceo, Vrednost = (int)tipUsluge };
+        Model.Stavke.Add(nova);
+
+}
+}
+
+<h1>@ViewData["Title"]</h1>
+
+    <div class="row">
+        <div class="col-md-5">
+            <form asp-route-returnUrl="@Model.ReturnUrl" method="post">
+                <h4>Napravi novi nalog</h4>
+                <hr />
+                <div asp-validation-summary="All" class="text-danger"></div>
+                <div class="form-group">
+                    <label asp-for="PruzalacUsluge.Ime"></label>
+                    <input asp-for="PruzalacUsluge.Ime" class="form-control" />
+                    <span asp-validation-for="PruzalacUsluge.Ime" class="text-danger"></span>
+                </div>
+                <div class="form-group">
+                    <label asp-for="PruzalacUsluge.Prezime"></label>
+                    <input asp-for="PruzalacUsluge.Prezime" class="form-control" />
+                    <span asp-validation-for="PruzalacUsluge.Prezime" class="text-danger"></span>
+                </div>
+                <div class="form-group">
+                    <label asp-for="PruzalacUsluge.DatumRodjenja"></label>
+                    <input asp-for="PruzalacUsluge.DatumRodjenja" class="form-control" />
+                    <span asp-validation-for="PruzalacUsluge.DatumRodjenja" class="text-danger"></span>
+                </div>
+                <div class="form-group">
+                    <label>Broj telefona</label>
+                    <input asp-for="PruzalacUsluge.PhoneNumber" class="form-control" />
+                    <span asp-validation-for="PruzalacUsluge.PhoneNumber" class="text-danger"></span>
+                </div>
+                <div class="form-group">
+                    <label asp-for="PruzalacUsluge.Opis"></label>
+                    <input asp-for="PruzalacUsluge.Opis" class="form-control" />
+                    <span asp-validation-for="PruzalacUsluge.Opis" class="text-danger"></span>
+                </div>
+                <div class="form-group">
+                    <label asp-for="PruzalacUsluge.UserName"></label>
+                    <input asp-for="PruzalacUsluge.UserName" class="form-control" />
+                    <span asp-validation-for="PruzalacUsluge.UserName" class="text-danger"></span>
+                </div>
+                <div class="form-group">
+                    <label>Sifra: </label>
+                    <input asp-for="Input.Password" class="form-control" />
+                    <span asp-validation-for="Input.Password" class="text-danger"></span>
+                </div>
+                <div class="form-group">
+                    <label>Unesite opet sifru: </label>
+                    <input asp-for="Input.ConfirmPassword" class="form-control" />
+                    <span asp-validation-for="Input.ConfirmPassword" class="text-danger"></span>
+                </div>
+                <div class="form-group">
+                    <ejs-uploader id="uploadFiles" selected="onSelect" removing="onFileRemove" uploading="onFileUpload" allowedExtensions="image/*" multiple="false">
+                        <e-uploader-asyncsettings saveUrl="api/Uploader/Save" removeUrl="api/Uploader/Remove"></e-uploader-asyncsettings>
+                        <e-uploader-buttons browse="Nadji sliku"></e-uploader-buttons>
+                    </ejs-uploader>
+                </div>
+                <div class="form-group">
+                    <input type="hidden" id="ImeSlike" asp-for="@Model.Putanja" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <ejs-multiselect id="games" change="Promena" mode="CheckBox" placeholder="Izaberite Tip Usluge" dataSource="@Model.Stavke">
+                        <e-multiselect-fields value="Vrednost" text="Tekst"></e-multiselect-fields>
+                    </ejs-multiselect>
+                </div>
+                <input id="ZaVrednosti" type="hidden" asp-for="PruzalacUsluge.TipUsluga"/>
+
+                <button type="submit" class="btn btn-primary">Registruj se</button>
+            </form>
+        </div>
+    </div>
+<script>
+
+
+        window.onload = function() {
+        let slovaZaMenjanje = document.querySelector('body > div > main > div > div > form > div:nth-child(12) > div > div > span.e-file-drop');
+        slovaZaMenjanje.innerHTML = "Ili prevucite ovde sliku";
+    }
+
+    function guid() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            let r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
+    function onFileUpload(args) {
+        const inputZaPutanju = document.getElementById("ImeSlike");
+        const putanja = inputZaPutanju.value;
+        const brojZaSlanje = guid();
+        args.customFormData = [{ 'id': brojZaSlanje }, { 'prethodna': putanja }];
+        const uploadObj = document.getElementById("uploadFiles").ej2_instances[0];
+        const imeSlike = uploadObj.getFilesData()[0].name;
+        inputZaPutanju.value = "KorisnickeSlike/" + brojZaSlanje + "_" + imeSlike;
+    }
+
+    function onFileRemove(args) {
+        const inputZaPutanju = document.getElementById("ImeSlike");
+        const putanja = inputZaPutanju.value;
+        args.customFormData = [{ 'slika': putanja }];
+        inputZaPutanju.value = "Nema slike.png";
+    }
+
+    function onSelect(args) {
+        var uploadObj = document.getElementById("uploadFiles").ej2_instances[0];
+        var allImages = ['png', 'jpg', 'jpeg', 'gif', 'tiff', 'bpg'];
+        var files = args.filesData;
+        var modifiedFiles = [];
+        for (var i = 0; i < files.length; i++) {
+            var file = files[i];
+                if (allImages.indexOf(file.type) === -1) {
+                    file.status = 'Tip fajla mora biti slika';
+                    file.statusCode = '0';
+                }
+                modifiedFiles.push(file);
+        }
+        args.isModified = true;
+        args.modifiedFilesData = modifiedFiles.concat(uploadObj.filesData);
+    }
+
+    function Promena(args) {
+        const vrednosti = args.value;
+        const divZaVrednosti = document.getElementById('ZaVrednosti');
+        let broj = parseInt(0);
+        vrednosti.forEach(x => {
+            broj += parseInt(x);
+        });
+        divZaVrednosti.value = broj;
+    }
+
+</script>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

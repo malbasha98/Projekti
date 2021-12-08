@@ -1,0 +1,335 @@
+﻿@page "/MojiOglasi"
+@inject AuthenticationStateProvider authenticationStateProvider
+@inject UserManager<IdentityUser> userManager
+@inject MySqlCRUD dbContext
+@inject NavigationManager navMenager
+@using Newtonsoft.Json;
+@using System.Text.RegularExpressions;
+
+<AuthorizeView Roles="KorisnikUsluge">
+    <Authorized>
+        @if (!Ucitan)
+        {
+            <div class="sk-circle">
+                <div class="sk-circle1 sk-child"></div>
+                <div class="sk-circle2 sk-child"></div>
+                <div class="sk-circle3 sk-child"></div>
+                <div class="sk-circle4 sk-child"></div>
+                <div class="sk-circle5 sk-child"></div>
+                <div class="sk-circle6 sk-child"></div>
+                <div class="sk-circle7 sk-child"></div>
+                <div class="sk-circle8 sk-child"></div>
+                <div class="sk-circle9 sk-child"></div>
+                <div class="sk-circle10 sk-child"></div>
+                <div class="sk-circle11 sk-child"></div>
+                <div class="sk-circle12 sk-child"></div>
+            </div>
+        }
+        else
+        {
+            <div class="row mb-3" style="display:flex; align-items:center">
+                <label style="margin-bottom:auto; margin-top:auto">Prikaži: &ensp;</label>
+                <span style="margin-bottom:auto; margin-top:auto">
+                    <SfDropDownList Index="0" TItem="Polje" TValue="string" DataSource="@listaS">
+                        <DropDownListEvents TValue="string" ValueChange="OnChangeListStanje"></DropDownListEvents>
+                        <DropDownListFieldSettings Text="Tekst" Value="Id"></DropDownListFieldSettings>
+                    </SfDropDownList>
+                </span>
+                <label style="margin-bottom:auto; margin-top:auto">&ensp; Filtriraj po: &ensp;</label>
+                <span style="margin-bottom:auto; margin-top:auto">
+                    <SfDropDownList Index="0" TItem="Polje" TValue="string" DataSource="@listaF">
+                        <DropDownListEvents TValue="string" ValueChange="OnChangeListFilter"></DropDownListEvents>
+                        <DropDownListFieldSettings Text="Tekst" Value="Id"></DropDownListFieldSettings>
+                    </SfDropDownList>
+                </span>
+                <label style="margin-bottom:auto; margin-top:auto">&ensp; Za tip usluge: &ensp;</label>
+                <span style="margin-bottom:auto; margin-top:auto">
+                    <SfMultiSelect @bind-Value="@selektovaneUsluge" Mode="VisualMode.CheckBox" Placeholder="Tipovi usluga" DataSource="@listaT" ShowDropDownIcon="true" EnableSelectionOrder="false" AllowFiltering="false" ShowSelectAll="true" UnSelectAllText="poništi" SelectAllText="svi tipovi" Width="250px">
+                        <MultiSelectEvents TValue="TipUsluge[]" ValueChange="OnChangeListTip"></MultiSelectEvents>
+                        <MultiSelectFieldSettings Text="Tekst" Value="TipUsluge"></MultiSelectFieldSettings>
+                    </SfMultiSelect>
+
+                </span>
+            </div>
+        <table class="table table-bordered table-hover">
+            <thead>
+                <tr>
+
+                    <th scope="col">Naslov oglasa</th>
+                    <th scope="col">Stanje oglasa</th>
+                    <th scope="col">Opis oglasa</th>
+                    <th scope="col">Brisanje oglasa</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var oglas in Oglasi.OrderBy(kriterijumF).Where(x => (x.TipUsluge & kriterijumT) == x.TipUsluge))
+                {
+                    if (!(prikaziAktivan && prikaziUIzvrsavanju && prikaziIzvrsen && prikaziNeaktivan))
+                    {
+                        if (prikaziAktivan && oglas.Stanje != Stanje.Aktivan)
+                            continue;
+                        if (prikaziUIzvrsavanju && oglas.Stanje != Stanje.UIzvršavanju)
+                            continue;
+                        if (prikaziIzvrsen && oglas.Stanje != Stanje.Izvršen)
+                            continue;
+                        if (prikaziNeaktivan && oglas.Stanje != Stanje.Neaktivan)
+                            continue;
+                    }
+                    var idOglasa = oglas.Id;
+                    var userNameKorisnika = oglas.KorisnikUsluge.ToString();
+                    <tr>
+                        <td style="cursor:pointer" @onclick="@(e => OtvoriOglas(idOglasa))" scope="col">@oglas.NaslovOglasa</td>
+                        @if (oglas.Stanje == Stanje.UIzvršavanju)
+                        {
+                            <td scope="col">U izvršavanju</td>
+                        }
+                        else
+                        {
+                            <td scope="col">@(oglas.Stanje)</td>
+                        }
+
+                        <td scope="col">@oglas.Opis</td>
+                        <td scope="col">
+                            <SfButton CssClass="e-danger" @onclick="@(e => PostaviOglasZaBrisanje(idOglasa))">Izbriši</SfButton>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <SfDialog Width="335px" IsModal="true" @bind-Visible="@Visibility">
+            <DialogTemplates>
+                <Header> Obaveštenje</Header>
+                <Content> <p>Da li ste sigurni da želite da obrišete oglas</p> </Content>
+            </DialogTemplates>
+            <DialogButtons>
+                <DialogButton OnClick="@ObrisiOglas">
+                    <DialogButtonModel Content="Da, siguran sam" IsPrimary="true"></DialogButtonModel>
+                </DialogButton>
+                <DialogButton OnClick="@(() => Visibility = false)">
+                    <DialogButtonModel Content="Odustani"></DialogButtonModel>
+                </DialogButton>
+            </DialogButtons>
+            <DialogAnimationSettings Effect="@DialogEffect.FadeZoom"></DialogAnimationSettings>
+        </SfDialog>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <h2>Nema nista na ovoj stranici</h2>
+    </NotAuthorized>
+</AuthorizeView>
+
+
+
+
+@code
+{
+    KorisnikUsluge Korisnik = new KorisnikUsluge();
+    List<Oglas> Oglasi = new List<Oglas>();
+
+    public bool Ucitan { get; set; } = false;
+    private bool Refresh { get; set; } = false;
+
+    private bool Visibility { get; set; } = false;
+    private Guid oglasZaBrisanje { get; set; }
+
+    private class Polje
+    {
+        public string Id { get; set; }
+        public string Tekst { get; set; }
+
+        public Polje() { }
+    }
+    public class PoljeTip
+    {
+        public TipUsluge TipUsluge { get; set; }
+        public string Tekst { get; set; }
+
+        public PoljeTip() { }
+
+        public PoljeTip(TipUsluge usluga)
+        {
+            TipUsluge = usluga;
+            string[] split = Regex.Split(usluga.ToString(), @"(?<!^)(?=[A-Z])");
+            string ceo = "";
+            foreach (var rec in split)
+            {
+                ceo += rec + " ";
+            }
+            Tekst = ceo;
+        }
+    }
+
+
+
+    private bool prikaziAktivan = true;
+    private bool prikaziUIzvrsavanju = true;
+    private bool prikaziIzvrsen = true;
+    private bool prikaziNeaktivan = true;
+
+    private List<Polje> listaS = new List<Polje>()
+{
+        new Polje() { Id = "opcija1", Tekst = "sve oglase"},
+        new Polje() { Id = "opcija2", Tekst = "aktivne oglase"},
+        new Polje() { Id = "opcija3", Tekst = "oglase u izvršavanju"},
+        new Polje() { Id = "opcija4", Tekst = "izvršene oglase"},
+        new Polje() { Id = "opcija5", Tekst = "neaktivne oglase"}
+    };
+
+    private Func<Oglas, string> kriterijumF = i => i.Stanje.ToString();
+    private string kriterijumFTekst;
+
+    private List<Polje> listaF = new List<Polje>()
+{
+        new Polje() { Id = "opcija1", Tekst = "stanju"},
+        new Polje() { Id = "opcija2", Tekst = "naslovu"},
+        new Polje() { Id = "opcija3", Tekst = "datumu važenja"},
+        new Polje() { Id = "opcija4", Tekst = "broju zahteva"}
+    };
+
+    private TipUsluge kriterijumT;
+    private List<PoljeTip> listaT = new List<PoljeTip>();
+    private TipUsluge[] selektovaneUsluge = null;
+
+    private void OnChangeListStanje(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string> args)
+    {
+        var itemData = JsonConvert.DeserializeObject<Polje>(args.ItemData != null ? args.ItemData.ToString() : "");
+        prikaziAktivan = false;
+        prikaziUIzvrsavanju = false;
+        prikaziIzvrsen = false;
+        prikaziNeaktivan = false;
+        switch (itemData.Id)
+        {
+            case "opcija1":
+                prikaziAktivan = true;
+                prikaziUIzvrsavanju = true;
+                prikaziIzvrsen = true;
+                prikaziNeaktivan = true;
+                break;
+            case "opcija2":
+                prikaziAktivan = true;
+                break;
+            case "opcija3":
+                prikaziUIzvrsavanju = true;
+                break;
+            case "opcija4":
+                prikaziIzvrsen = true;
+                break;
+            case "opcija5":
+                prikaziNeaktivan = true;
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void OnChangeListFilter(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string> args)
+    {
+        var itemData = JsonConvert.DeserializeObject<Polje>(args.ItemData != null ? args.ItemData.ToString() : "");
+        kriterijumFTekst = itemData.Id;
+
+        switch (kriterijumFTekst)
+        {
+            case "opcija1":
+                /*dodato*/
+                kriterijumF = i => i.Stanje.ToString();
+                break;
+            case "opcija2":
+                kriterijumF = i => i.NaslovOglasa;
+                break;
+            case "opcija3":
+                kriterijumF = i => i.DatumVazenja.ToString("yyyy.MM.dd");
+                break;
+            case "opcija4":
+                kriterijumF = i =>
+                {
+                    var str = i.Zahtevi.Count.ToString();
+                    while (str.Length < 6)
+                        str = str.Insert(0, "0");
+                    return str;
+                };
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void OnChangeListTip(MultiSelectChangeEventArgs<TipUsluge[]> args)
+    {
+        var itemData = args.Value;
+        if (itemData == null)
+        {
+            itemData = (TipUsluge[])Enum.GetValues(typeof(TipUsluge));
+        }
+        kriterijumT = 0;
+        foreach (var tip in itemData)
+        {
+            kriterijumT = kriterijumT | tip;
+        }
+        this.StateHasChanged();
+    }
+
+    protected async override Task OnInitializedAsync()
+    {
+        Ucitan = false;
+        var state = await authenticationStateProvider.GetAuthenticationStateAsync();
+        if (state.User.IsInRole("KorisnikUsluge"))
+        {
+            foreach (var tipUsluge in (TipUsluge[])Enum.GetValues(typeof(TipUsluge)))
+            {
+                kriterijumT = kriterijumT | tipUsluge;
+                PoljeTip novoPolje = new PoljeTip(tipUsluge);
+                listaT.Add(novoPolje);
+            }
+
+            Korisnik = await dbContext.VratiKorisnika(state.User.Identity.Name);
+            foreach (var oglas in Korisnik.MojiOglasi)
+            {
+                if (oglas.ProveriDaLiVazi())
+                {
+                    dbContext.Update(oglas);
+                    await dbContext.SaveChangesAsync();
+                }
+                Oglasi.Add(oglas);
+            }
+        }
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender && !Refresh)
+        {
+            Ucitan = true;
+            StateHasChanged();
+        }
+
+    }
+
+    private async Task OtvoriKorisnika(string userNameKorisnika)
+    {
+        var korisnik = await dbContext.VratiKorisnika(userNameKorisnika);
+        if (korisnik == null)
+            navMenager.NavigateTo("Profil/" + korisnik.Id);
+    }
+
+    private void OtvoriOglas(Guid idOglasa)
+    {
+
+        navMenager.NavigateTo("Oglas/" + idOglasa.ToString());
+
+    }
+    private async Task ObrisiOglas()
+    {
+        Refresh = true;
+        Ucitan = false;
+        await dbContext.ObrisiOglas(oglasZaBrisanje);
+        this.Visibility = false;
+        navMenager.NavigateTo("/MojiOglasi", true);
+    }
+
+    private void PostaviOglasZaBrisanje(Guid idOglasa)
+    {
+        oglasZaBrisanje = idOglasa;
+        this.Visibility = true;
+    }
+}

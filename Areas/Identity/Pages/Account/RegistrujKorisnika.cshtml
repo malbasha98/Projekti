@@ -1,0 +1,126 @@
+﻿@page "/RegistrujKorisnika"
+@using Kucni_poslovi.Shared;
+@model RegistrujKorisnikaModel
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@using Syncfusion.EJ2.Inputs
+
+@{
+    ViewData["Title"] = "Registruj se";
+}
+
+<h1>@ViewData["Title"]</h1>
+
+<div class="row">
+    <div class="col-md-5">
+        <form asp-route-returnUrl="@Model.ReturnUrl" method="post">
+            <h4>Napravite novi nalog</h4>
+            <hr />
+            <div asp-validation-summary="All" class="text-danger"></div>
+            <div class="form-group">
+                <label asp-for="KorisnikUsluge.Ime"></label>
+                <input asp-for="KorisnikUsluge.Ime" class="form-control" />
+                <span asp-validation-for="KorisnikUsluge.Ime" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="KorisnikUsluge.Prezime"></label>
+                <input asp-for="KorisnikUsluge.Prezime" class="form-control" />
+                <span asp-validation-for="KorisnikUsluge.Prezime" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="KorisnikUsluge.DatumRodjenja"></label>
+                <input asp-for="KorisnikUsluge.DatumRodjenja" class="form-control" />
+                <span asp-validation-for="KorisnikUsluge.DatumRodjenja" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label>Broj telefona</label>
+                <input asp-for="KorisnikUsluge.PhoneNumber" class="form-control" />
+                <span asp-validation-for="KorisnikUsluge.PhoneNumber" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="KorisnikUsluge.Opis"></label>
+                <input asp-for="KorisnikUsluge.Opis" class="form-control" />
+                <span asp-validation-for="KorisnikUsluge.Opis" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="KorisnikUsluge.UserName"></label>
+                <input asp-for="KorisnikUsluge.UserName" class="form-control" />
+                <span asp-validation-for="KorisnikUsluge.UserName" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label>Sifra: </label>
+                <input asp-for="Input.Password" class="form-control" />
+                <span asp-validation-for="Input.Password" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label>Unesite opet sifru: </label>
+                <input asp-for="Input.ConfirmPassword" class="form-control" />
+                <span asp-validation-for="Input.ConfirmPassword" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <ejs-uploader id="uploadFiles" selected="onSelect" removing="onFileRemove" uploading="onFileUpload" allowedExtensions="image/*" multiple="false">
+                    <e-uploader-asyncsettings saveUrl="api/Uploader/Save" removeUrl="api/Uploader/Remove"></e-uploader-asyncsettings>
+                    <e-uploader-buttons browse="Nadji sliku"></e-uploader-buttons>
+                </ejs-uploader>
+            </div>
+            <div class="form-group">
+                <input type="hidden" id="ImeSlike" asp-for="Putanja" class="form-control" />
+            </div>
+            <button type="submit" class="btn btn-primary">Registruj se</button>
+        </form>
+    </div>
+</div>
+
+<script>
+
+    window.onload = function() {
+        let slovaZaMenjanje = document.querySelector('body > div > main > div > div > form > div:nth-child(12) > div > div > span.e-file-drop');
+        slovaZaMenjanje.innerHTML = "Ili prevucite ovde sliku";
+    }
+
+    function guid() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            let r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
+    function onFileUpload(args) {
+        const inputZaPutanju = document.getElementById("ImeSlike");
+        const putanja = inputZaPutanju.value;
+        const brojZaSlanje = guid();
+        args.customFormData = [{ 'id': brojZaSlanje }, { 'prethodna': putanja }];
+        const uploadObj = document.getElementById("uploadFiles").ej2_instances[0];
+        const imeSlike = uploadObj.getFilesData()[0].name;
+        inputZaPutanju.value = "KorisnickeSlike/" + brojZaSlanje + "_" + imeSlike;
+    }
+
+    function onFileRemove(args) {
+        const inputZaPutanju = document.getElementById("ImeSlike");
+        const putanja = inputZaPutanju.value;
+        args.customFormData = [{ 'slika': putanja }];
+        inputZaPutanju.value = "Nema slike.png";
+    }
+
+    function onSelect(args) {
+        var uploadObj = document.getElementById("uploadFiles").ej2_instances[0];
+        var allImages = ['png', 'jpg', 'jpeg', 'gif', 'tiff', 'bpg'];
+        var files = args.filesData;
+        var modifiedFiles = [];
+        for (var i = 0; i < files.length; i++) {
+            var file = files[i];
+                if (allImages.indexOf(file.type) === -1) {
+                    file.status = 'Tip fajla mora biti slika';
+                    file.statusCode = '0';
+                }
+                modifiedFiles.push(file);
+        }
+        args.isModified = true;
+        args.modifiedFilesData = modifiedFiles.concat(uploadObj.filesData);
+    }
+
+</script>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
